@@ -14,8 +14,15 @@ END_DATE = today.strftime("%Y%m%d")
 
 DATA_DIR = "raw_data/"
 
-# Define lists for multiple ETFs
-A_SHARE_ETFS = ["513300"]
+# Define lists for Chinese ETFs
+A_SHARE_ETFS = ["513300",
+                "518880",
+                "515450",
+                "513360",
+                "510880",
+                "512480"]
+
+# Define lists for American ETFs
 US_SHARE_ETFS = ["105.QQQ"]  # 105 is the EastMoney prefix for Nasdaq
 # =======================================================
 
@@ -36,7 +43,7 @@ def fetch_and_save_data(a_etf_list, us_etf_list, start_date, end_date):
             a_data[symbol] = pd.read_csv(file_path)
         else:
             print(f"Fetching data for A-share ETF {symbol} ({start_date} - {end_date})...")
-            df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+            df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") # 东方财富接口
             df.to_csv(file_path, index=False, encoding="utf-8-sig")
             a_data[symbol] = df
             print(f"Saved {symbol} data to {file_path}")
