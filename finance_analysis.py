@@ -12,7 +12,7 @@ one_year_ago = today - timedelta(days=365)
 START_DATE = one_year_ago.strftime("%Y%m%d")
 END_DATE = today.strftime("%Y%m%d")
 
-DATA_DIR = "raw_data"
+DATA_DIR = "raw_data/"
 
 # Define lists for multiple ETFs
 A_SHARE_ETFS = ["513300"]
@@ -20,16 +20,17 @@ US_SHARE_ETFS = ["105.QQQ"]  # 105 is the EastMoney prefix for Nasdaq
 # =======================================================
 
 def fetch_and_save_data(a_etf_list, us_etf_list, start_date, end_date):
-    if not os.path.exists(DATA_DIR):
-        os.makedirs(DATA_DIR)
-        print(f"Created directory: {DATA_DIR}")
+    dir_path = os.path.join(DATA_DIR, END_DATE)
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+        print(f"Created directory: {dir_path}")
 
     a_data = {}
     us_data = {}
 
     # Fetch A-Share ETFs
     for symbol in a_etf_list:
-        file_path = os.path.join(DATA_DIR, f"{symbol}_{end_date}.csv")
+        file_path = os.path.join(dir_path, f"{symbol}_{end_date}.csv")
         if os.path.exists(file_path):
             print(f"Found local cache for {symbol}. Loading...")
             a_data[symbol] = pd.read_csv(file_path)
@@ -42,7 +43,7 @@ def fetch_and_save_data(a_etf_list, us_etf_list, start_date, end_date):
 
     # Fetch US-Share ETFs
     for symbol in us_etf_list:
-        file_path = os.path.join(DATA_DIR, f"{symbol}_{end_date}.csv")
+        file_path = os.path.join(dir_path, f"{symbol}_{end_date}.csv")
         if os.path.exists(file_path):
             print(f"Found local cache for {symbol}. Loading...")
             us_data[symbol] = pd.read_csv(file_path)
