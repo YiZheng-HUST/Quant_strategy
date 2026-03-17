@@ -15,20 +15,27 @@ END_DATE = today.strftime("%Y%m%d")
 DATA_DIR = "raw_data/"
 
 # Define lists for Chinese ETFs
-A_SHARE_ETFS = ["513300",
-                "518880",
-                "515450",
-                "513360",
-                "510880",
-                "512480"]
+A_SHARE_ETFS = ["513300", # 纳斯达克ETF
+                "513500", # 标普500ETF
+                "518880", # 华安黄金ETF
+                "515450", # 红利低波50ETF
+                "513360", # 短融ETF海富通
+                "510880", # 红利ETF华泰柏瑞
+                "512480"] # 半导体ETF
 
 # Define lists for American ETFs
-US_SHARE_ETFS = ["105.QQQ"]  # 105 is the EastMoney prefix for Nasdaq
+US_SHARE_ETFS = ["105.QQQ", # 纳斯达克
+                 "106.SPY", # 标普500
+                 "106.DIA", # 道琼斯
+                 "106.GLD", # 黄金
+                 "105.SHY", # 短期美债
+                 "105.IEF", # 中期美债
+                 "105.TLT"] # 长期美债
 
 # Define data source
-DATA_SOURCE = ["eastmoney",
-               "sina",
-               "tencent"]
+DATA_SOURCE = ["eastmoney", # 东方财富
+               "sina",      # 新浪
+               "tencent"]   # 腾讯
 # =======================================================
 
 def fetch_and_save_data(a_etf_list, us_etf_list, data_source: str, start_date, end_date):
