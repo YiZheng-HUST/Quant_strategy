@@ -24,9 +24,14 @@ A_SHARE_ETFS = ["513300",
 
 # Define lists for American ETFs
 US_SHARE_ETFS = ["105.QQQ"]  # 105 is the EastMoney prefix for Nasdaq
+
+# Define data source
+DATA_SOURCE = ["eastmoney",
+               "sina",
+               "tencent"]
 # =======================================================
 
-def fetch_and_save_data(a_etf_list, us_etf_list, start_date, end_date):
+def fetch_and_save_data(a_etf_list, us_etf_list, data_source: str, start_date, end_date):
     dir_path = os.path.join(DATA_DIR, END_DATE)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -43,7 +48,15 @@ def fetch_and_save_data(a_etf_list, us_etf_list, start_date, end_date):
             a_data[symbol] = pd.read_csv(file_path)
         else:
             print(f"Fetching data for A-share ETF {symbol} ({start_date} - {end_date})...")
-            df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") # 东方财富接口
+            if data_source == "eastmoney":
+                df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") # 东方财富接口
+            elif data_source == "sina":
+                df = ak.stock_zh_a_daily(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 新浪接口，沪市为例
+            elif data_source == "tencent":
+                df = ak.stock_zh_a_hist(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 腾讯接口，沪市为例
+            else:
+                raise ValueError("Invalid data source.")
+
             df.to_csv(file_path, index=False, encoding="utf-8-sig")
             a_data[symbol] = df
             print(f"Saved {symbol} data to {file_path}")
@@ -134,7 +147,7 @@ def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
 
 if __name__ == "__main__":
     # Fetch all data from the lists
-    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS, START_DATE, END_DATE)
+    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS, DATA_SOURCE[0], START_DATE, END_DATE)
     
     # Plot the first item in each list by default
     process_and_plot(dict_a, dict_u, A_SHARE_ETFS[0], US_SHARE_ETFS[0])
