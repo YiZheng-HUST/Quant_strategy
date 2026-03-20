@@ -1,4 +1,6 @@
 import os
+import random
+import time
 import akshare as ak
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -99,6 +101,7 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
                 a_data[symbol] = df
                 print(f"Saved {symbol} data to {file_path}")
                 logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
+        time.sleep(random.uniform(1.0, 3.0))
     
     # Fetch US-Share ETFs
     for name, symbol in us_etf_dict_eastmoney.items():
@@ -126,6 +129,7 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
                 us_data[symbol] = df
                 print(f"Saved {symbol} data to {file_path}")
+            time.sleep(random.uniform(1.0, 3.0))
     return a_data, us_data
 
 def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
