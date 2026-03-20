@@ -60,7 +60,6 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
     dir_path = os.path.join(DATA_DIR, END_DATE)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-        print(f"Created directory: {dir_path}")
         logging.info(f"Created directory: {dir_path}")
 
     a_data = {}
@@ -68,38 +67,31 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
 
     # Fetch A-Share ETFs
     for name, symbol in a_etf_dict.items():
-        print(f"name = {name}, symbol = {symbol}")
         file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
-            print(f"Found local cache for A-share ETF {symbol}. Loading...")
             logging.info(f"Found local cache for A-share ETF {symbol}. Loading...")
             a_data[symbol] = pd.read_csv(file_path)
         else:
-            print(f"Fetching data for A-share ETF {symbol} ({start_date} - {end_date})...")
             df = None
             try:
                 logging.info(f"Fetching data for A-share ETF {symbol} from eastmoney ({start_date} - {end_date})...")
                 df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") # 东方财富接口
             except Exception as e:
-                print(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
                 logging.warning(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
                 try:
                     logging.info(f"Fetching data for A-share ETF {symbol} from sina ({start_date} - {end_date})...")
                     df = ak.stock_zh_a_daily(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 新浪接口，沪市为例
                 except Exception as e2:
-                    print(f"Failed to fetch data from sina for {symbol}: {e2}. Trying tencent...")
                     logging.warning(f"Failed to fetch data from sina for {symbol}: {e2}. Trying tencent...")
                     try:
                         logging.info(f"Fetching data for A-share ETF {symbol} from tencent ({start_date} - {end_date})...")
                         df = ak.stock_zh_a_hist(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 腾讯接口，沪市为例
                     except Exception as e3:
-                        print(f"Failed to fetch data from tencent for {symbol}: {e3}. All sources failed.")
                         logging.error(f"Failed to fetch data from tencent for {symbol}: {e3}. All sources failed.")
             
             if df is not None:
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
                 a_data[symbol] = df
-                print(f"Saved {symbol} data to {file_path}")
                 logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
         time.sleep(random.uniform(1.0, 3.0))
     
@@ -107,28 +99,23 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
     for name, symbol in us_etf_dict_eastmoney.items():
         file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
-            print(f"Found local cache for US ETF {symbol}. Loading...")
             logging.info(f"Found local cache for US ETF {symbol}. Loading...")
             us_data[symbol] = pd.read_csv(file_path)
         else:
             try:
-                print(f"Fetching data for US ETF {symbol} from eastmoney ({start_date} - {end_date})...")
                 logging.info(f"Fetching data for US ETF {symbol} from eastmoney ({start_date} - {end_date})...")
                 df = ak.stock_us_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
                 us_data[symbol] = df
-                print(f"Saved {symbol} data to {file_path}")
                 logging.info(f"Saved US ETF {symbol} data to {file_path}")
             except Exception as e:
-                print(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
                 logging.warning(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
                 symbol = us_etf_dict_sina[name]
-                print(f"Fetching data for US ETF {symbol} from sina ({start_date} - {end_date})...")
                 logging.info(f"Fetching data for US ETF {symbol} from sina ({start_date} - {end_date})...")
                 df = ak.stock_us_daily(symbol=symbol, adjust="qfq")
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
                 us_data[symbol] = df
-                print(f"Saved {symbol} data to {file_path}")
+                logging.info(f"Saved US-share ETF {symbol} data to {file_path}")
             time.sleep(random.uniform(1.0, 3.0))
     return a_data, us_data
 
