@@ -21,16 +21,28 @@ A_SHARE_ETFS = ["513300", # 纳斯达克ETF
                 "515450", # 红利低波50ETF
                 "513360", # 短融ETF海富通
                 "510880", # 红利ETF华泰柏瑞
-                "512480"] # 半导体ETF
+                "512480", # 半导体ETF
+                ]
 
-# Define lists for American ETFs
-US_SHARE_ETFS = ["105.QQQ", # 纳斯达克
-                 "106.SPY", # 标普500
-                 "106.DIA", # 道琼斯
-                 "106.GLD", # 黄金
-                 "105.SHY", # 短期美债
-                 "105.IEF", # 中期美债
-                 "105.TLT"] # 长期美债
+# Define lists for American ETFs east money
+US_SHARE_ETFS_EASTMONEY = [ "105.QQQ", # 纳斯达克
+                            "106.SPY", # 标普500
+                            "106.DIA", # 道琼斯
+                            "106.GLD", # 黄金
+                            "105.SHY", # 短期美债
+                            "105.IEF", # 中期美债
+                            "105.TLT", # 长期美债
+                            ]
+
+# Define lists for American ETFs sina
+US_SHARE_ETFS_SINA = [  "QQQ", # 纳斯达克
+                        "SPY", # 标普500
+                        "DIA", # 道琼斯
+                        "GLD", # 黄金
+                        "SHY", # 短期美债
+                        "IEF", # 中期美债
+                        "TLT", # 长期美债
+                        ]
 
 # Define data source
 DATA_SOURCE = ["eastmoney", # 东方财富
@@ -76,7 +88,10 @@ def fetch_and_save_data(a_etf_list, us_etf_list, data_source: str, start_date, e
             us_data[symbol] = pd.read_csv(file_path)
         else:
             print(f"Fetching data for US ETF {symbol} ({start_date} - {end_date})...")
-            df = ak.stock_us_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+            if data_source == "eastmoney":
+                df = ak.stock_us_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
+            elif data_source == "sina":
+                df = ak.stock_us_daily(symbol=symbol, adjust="qfq") # 新浪接口，沪市为例
             df.to_csv(file_path, index=False, encoding="utf-8-sig")
             us_data[symbol] = df
             print(f"Saved {symbol} data to {file_path}")
@@ -154,7 +169,8 @@ def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
 
 if __name__ == "__main__":
     # Fetch all data from the lists
-    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS, DATA_SOURCE[0], START_DATE, END_DATE)
+    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS_SINA, DATA_SOURCE[1], START_DATE, END_DATE)
     
+
     # Plot the first item in each list by default
-    process_and_plot(dict_a, dict_u, A_SHARE_ETFS[0], US_SHARE_ETFS[0])
+    process_and_plot(dict_a, dict_u, A_SHARE_ETFS[0], US_SHARE_ETFS_SINA[0])
