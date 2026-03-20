@@ -56,7 +56,7 @@ DATA_SOURCE = ["eastmoney", # 东方财富
                "tencent"]   # 腾讯
 # =======================================================
 
-def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_date, end_date):
+def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_date, end_date):
     dir_path = os.path.join(DATA_DIR, END_DATE)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -121,6 +121,9 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
                 logging.info(f"Saved US-share ETF {symbol} data to {file_path}")
 
     return a_data, us_data
+
+def fetch_pe_data(share, START_DATE, END_DATE):
+    return 0
 
 def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
     print("Processing data and converting currency...")
@@ -193,7 +196,7 @@ def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
 
 if __name__ == "__main__":
     # Fetch all data from the lists
-    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA, START_DATE, END_DATE)
+    dict_a, dict_u = fetch_price_data(A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA, START_DATE, END_DATE)
 
     # Plot the first item in each list by default
     # process_and_plot(dict_a, dict_u, A_SHARE_ETFS[0], US_SHARE_ETFS_SINA[0])
