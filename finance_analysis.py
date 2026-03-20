@@ -69,7 +69,7 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
     # Fetch A-Share ETFs
     for name, symbol in a_etf_dict.items():
         print(f"name = {name}, symbol = {symbol}")
-        file_path = os.path.join(dir_path, f"{symbol}_{end_date}.csv")
+        file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             print(f"Found local cache for A-share ETF {symbol}. Loading...")
             logging.info(f"Found local cache for A-share ETF {symbol}. Loading...")
@@ -105,7 +105,7 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, sta
     
     # Fetch US-Share ETFs
     for name, symbol in us_etf_dict_eastmoney.items():
-        file_path = os.path.join(dir_path, f"{symbol}_{end_date}.csv")
+        file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             print(f"Found local cache for US ETF {symbol}. Loading...")
             logging.info(f"Found local cache for US ETF {symbol}. Loading...")
