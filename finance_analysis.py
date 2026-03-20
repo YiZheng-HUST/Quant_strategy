@@ -54,7 +54,7 @@ DATA_SOURCE = ["eastmoney", # 东方财富
                "tencent"]   # 腾讯
 # =======================================================
 
-def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, data_source: str, start_date, end_date):
+def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_date, end_date):
     dir_path = os.path.join(DATA_DIR, END_DATE)
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
@@ -74,19 +74,31 @@ def fetch_and_save_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, dat
             a_data[symbol] = pd.read_csv(file_path)
         else:
             print(f"Fetching data for A-share ETF {symbol} ({start_date} - {end_date})...")
-            logging.info(f"Fetching data for A-share ETF {symbol} from {data_source} ({start_date} - {end_date})...")
-            if data_source == "eastmoney":
+            df = None
+            try:
+                logging.info(f"Fetching data for A-share ETF {symbol} from eastmoney ({start_date} - {end_date})...")
                 df = ak.fund_etf_hist_em(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq") # 东方财富接口
-            elif data_source == "sina":
-                df = ak.stock_zh_a_daily(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 新浪接口，沪市为例
-            elif data_source == "tencent":
-                df = ak.stock_zh_a_hist(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 腾讯接口，沪市为例
-            else:
-                raise ValueError("Invalid data source.")
-            df.to_csv(file_path, index=False, encoding="utf-8-sig")
-            a_data[symbol] = df
-            print(f"Saved {symbol} data to {file_path}")
-            logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
+            except Exception as e:
+                print(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
+                logging.warning(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
+                try:
+                    logging.info(f"Fetching data for A-share ETF {symbol} from sina ({start_date} - {end_date})...")
+                    df = ak.stock_zh_a_daily(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 新浪接口，沪市为例
+                except Exception as e2:
+                    print(f"Failed to fetch data from sina for {symbol}: {e2}. Trying tencent...")
+                    logging.warning(f"Failed to fetch data from sina for {symbol}: {e2}. Trying tencent...")
+                    try:
+                        logging.info(f"Fetching data for A-share ETF {symbol} from tencent ({start_date} - {end_date})...")
+                        df = ak.stock_zh_a_hist(symbol="sh" + symbol, start_date=start_date, end_date=end_date, adjust="qfq") # 腾讯接口，沪市为例
+                    except Exception as e3:
+                        print(f"Failed to fetch data from tencent for {symbol}: {e3}. All sources failed.")
+                        logging.error(f"Failed to fetch data from tencent for {symbol}: {e3}. All sources failed.")
+            
+            if df is not None:
+                df.to_csv(file_path, index=False, encoding="utf-8-sig")
+                a_data[symbol] = df
+                print(f"Saved {symbol} data to {file_path}")
+                logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
     
     # Fetch US-Share ETFs
     for name, symbol in us_etf_dict_eastmoney.items():
@@ -187,7 +199,7 @@ def process_and_plot(a_data_dict, us_data_dict, a_target, us_target):
 
 if __name__ == "__main__":
     # Fetch all data from the lists
-    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA, DATA_SOURCE[1], START_DATE, END_DATE)
+    dict_a, dict_u = fetch_and_save_data(A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA, START_DATE, END_DATE)
 
     # Plot the first item in each list by default
     # process_and_plot(dict_a, dict_u, A_SHARE_ETFS[0], US_SHARE_ETFS_SINA[0])
