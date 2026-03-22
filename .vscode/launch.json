@@ -11,18 +11,10 @@
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Python 调试程序: (akshare_test.py)",
+            "name": "Python 调试程序: (yfinance_test.py)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/akshare_test.py",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Python: 调试主程序 (main.py)",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/main.py",
+            "program": "${workspaceFolder}/yfinance_test.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
         }
