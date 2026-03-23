@@ -25,7 +25,7 @@ A_SHARE_ETFS = {
     "A_sp500_etf": "513500",  # 标普500ETF
     "A_huaan_gold_etf": "518880",  # 华安黄金ETF
     "A_red_low_volatility_50_etf": "515450",  # 红利低波50ETF
-    "A_short_term_bond_etf": "513360",  # 短融ETF海富通
+    "A_short_term_bond_etf": "511360",  # 短融ETF海富通
     "A_red_etf_huatai": "510880",  # 红利ETF华泰柏瑞
     "A_semiconductor_etf": "512480",  # 半导体ETF
 }
