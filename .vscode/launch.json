@@ -25,6 +25,14 @@
             "program": "${workspaceFolder}/finnhub_data_fetch.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python 调试程序: (stress_test.py)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/stress_test.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
