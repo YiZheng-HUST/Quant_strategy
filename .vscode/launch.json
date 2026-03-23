@@ -3,21 +3,28 @@
     "configurations": [
 
         {
-            "name": "Python 调试程序: (finance_analysis.py)",
+            "name": "Python 调试程序: (akshare_data_fetch.py)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/finance_analysis.py",
+            "program": "${workspaceFolder}/akshare_data_fetch.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Python 调试程序: (yfinance_test.py)",
+            "name": "Python 调试程序: (yfinance_data_fetch.py)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/yfinance_test.py",
+            "program": "${workspaceFolder}/yfinance_data_fetch.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python 调试程序: (finnhub_data_fetch.py)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/finnhub_data_fetch.py",
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
         }
     ]
 }
-~       
