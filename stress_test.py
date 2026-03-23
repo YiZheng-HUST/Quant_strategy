@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
+from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 
 # 全局图表样式设置
 plt.style.use('seaborn-v0_8-whitegrid')
@@ -47,7 +48,7 @@ def load_and_standardize_data(symbols, csv_dir, start_date, end_date):
     prices = pd.DataFrame(price_data)
     prices = prices.loc[start_date:end_date].ffill().bfill()
     print("[+] 数据清洗与对齐完成。")
-    df.to_csv(os.path.join(csv_dir, 'clean_data.csv'))
+    prices.to_csv(os.path.join(csv_dir, 'clean_data.csv'))
     return prices
 
 # ==========================================
@@ -119,7 +120,7 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
     return portfolio_series
 
 # ==========================================
-# 模块 4: 核心量化指标评测 (纯计算无图表)
+# 核心量化指标评测 (纯计算无图表)
 # ==========================================
 def calculate_max_drawdown(portfolio_series):
     """
@@ -224,7 +225,7 @@ def plot_component_trends(prices_df, mdd_date, save_dir):
 if __name__ == "__main__":
     # 配置参数
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20250320-20260320/' 
-    TARGET_SYMBOLS = ['511360', '510880', 'QQQ', '518880']
+    TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
     START = '2025-03-20'
     END = '2026-03-20'
@@ -233,7 +234,7 @@ if __name__ == "__main__":
     df_prices = load_and_standardize_data(TARGET_SYMBOLS, WORK_DIR, START, END)
     
     # 汇率转换
-    df_prices = apply_currency_conversion(df_prices, foreign_symbols=['QQQ'])
+    df_prices = apply_currency_conversion(df_prices, foreign_symbols=US_SHARE_ETFS_SINA['nasdaq'])
     
     # 运行策略引擎 (在这里，您可以自由切换再平衡开关，比如试着改成 rebalance_freq='Q' 看季度再平衡效果)
     portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M')
