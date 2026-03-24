@@ -20,6 +20,10 @@ FOREIGN_SYMBOLS = [ US_SHARE_ETFS_SINA['nasdaq']['symbol'],
 
 BOND_SYMBOLS = ['treasury_bonds_yield']
 
+FRICTION_COST = {"stamp_duty": 0.0005,  # 印花税，卖出单向收取
+                 "transfer_fee": 0.00001,   # 过户费，双向收取
+                 "regulatory_fee": 0.0000687}  # 交易规费，双向收取
+
 
 # ==========================================
 # 汇率穿透引擎
@@ -103,7 +107,7 @@ if __name__ == "__main__":
 
     # 抽取与清洗
     df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END)
-    df_bond = load_and_standardize_bond_data(['treasury_bonds_yield'], WORK_DIR, START, END)
+    df_bond = load_and_standardize_bond_data(BOND_SYMBOLS, WORK_DIR, START, END)
     
     # 汇率转换
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
