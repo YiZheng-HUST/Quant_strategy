@@ -59,7 +59,7 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebalance_freq='M'):
+def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
@@ -68,6 +68,7 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
     
     daily_returns = prices_df.pct_change().dropna()
     portfolio_value = [1.0]
+    initial_portfolio_value = 1.0
     current_weights = np.array(initial_weights).copy()
     
     # 获取时间周期索引，用于触发再平衡
@@ -75,10 +76,12 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
 
     for i in range(len(daily_returns)):
         # 1. 计算当日总体涨跌幅
+        # 权重 * 每日收益率
         today_return = np.sum(current_weights * daily_returns.iloc[i].values)
         
         # 2. 累加净值
         new_value = portfolio_value[-1] * (1 + today_return)
+
         portfolio_value.append(new_value)
         
         # 3. 权重自然漂移
@@ -88,7 +91,24 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
         if enable_rebalance and i < len(daily_returns) - 1:
             # 如果今天和明天的周期不同（例如到了月末最后一天），触发权重重置
             if periods[i] != periods[i+1]:
+
+                # 计算从当前漂移权重调整回初始权重所需的交易量 (Turnover)
+                # turnover_weight 代表单向交易的权重之和（即卖出权重总和，也等于买入权重总和）
+                turnover_weight = np.sum(np.maximum(0, current_weights - np.array(initial_weights)))
+
+                # 卖出成本（印花税，单向）
+                sell_cost = turnover_weight * friction_costs["stamp_duty"]
+
+                # 双向成本（过户费 + 交易规费），乘以2因为买卖都收
+                round_trip_cost = turnover_weight * 2 * (friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
+
+                # 从当日净值中扣除总摩擦成本
+                total_friction_ratio = sell_cost + round_trip_cost
+                new_value = new_value * (1 - total_friction_ratio)
+
+                # 重置权重并更新扣除成本后的净值
                 current_weights = np.array(initial_weights).copy()
+                portfolio_value[-1] = new_value
 
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     return portfolio_series
@@ -113,7 +133,7 @@ if __name__ == "__main__":
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     
     # 运行策略引擎（核心）
-    portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M')
+    portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST)
 
     # 计算最大回撤
     mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
