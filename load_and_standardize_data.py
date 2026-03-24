@@ -84,7 +84,7 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
         years_col = 'two_years_China_bond_rate'
         bond_data[sym] = df[years_col]
     
-        # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
+    # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
     bond = pd.DataFrame(bond_data)
     bond = bond.loc[start_date:end_date].ffill().bfill()
     print("[+] 数据清洗与对齐完成。")

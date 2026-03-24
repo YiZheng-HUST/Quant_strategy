@@ -7,6 +7,19 @@ from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_E
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data
 
 
+# 全局定义区
+FOREIGN_SYMBOLS = [ US_SHARE_ETFS_SINA['nasdaq'], 
+                    US_SHARE_ETFS_SINA['sp500'], 
+                    US_SHARE_ETFS_SINA['dow_jones'], 
+                    US_SHARE_ETFS_SINA['gold'],
+                    US_SHARE_ETFS_EASTMONEY['nasdaq'], 
+                    US_SHARE_ETFS_EASTMONEY['sp500'], 
+                    US_SHARE_ETFS_EASTMONEY['dow_jones'], 
+                    US_SHARE_ETFS_EASTMONEY['gold'],]
+
+BOND_SYMBOLS = ['treasury_bonds_yield']
+
+
 # 全局图表样式设置
 plt.style.use('seaborn-v0_8-whitegrid')
 
@@ -186,9 +199,6 @@ if __name__ == "__main__":
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/' 
     # TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
     TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
-    FOREIGN_SYMBOLS = [US_SHARE_ETFS_SINA['nasdaq'], US_SHARE_ETFS_SINA['sp500'], US_SHARE_ETFS_SINA['dow_jones'], US_SHARE_ETFS_SINA['gold'],
-                       US_SHARE_ETFS_EASTMONEY['nasdaq'], US_SHARE_ETFS_EASTMONEY['sp500'], US_SHARE_ETFS_EASTMONEY['dow_jones'], US_SHARE_ETFS_EASTMONEY['gold'],]
-    BOND_SYMBOLS = ['treasury_bonds_yield']
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
     START = '2021-03-24'
     END = '2026-03-23'
