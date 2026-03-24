@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
+import matplotlib.ticker as ticker
+import matplotlib.dates as mdates
 
 
 # 全局图表样式设置
@@ -67,6 +69,14 @@ def plot_portfolio_performance(portfolio_series, save_dir):
                 xytext=(-100, -40), textcoords='offset points',
                 arrowprops=dict(arrowstyle='->', color='red'), color='red', fontweight='bold')
 
+    # 增加刻度线密度：x轴(时间)使用 AutoDateLocator，y轴(数值)使用 MaxNLocator
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=10, maxticks=25))
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+
+    # 设置 X轴 和 Y轴 刻度数字的字体大小
+    ax.tick_params(axis='x', which='major', labelsize=8)
+    ax.tick_params(axis='y', which='major', labelsize=8)
+
     ax.set_title('Figure 1: Total Portfolio Performance', fontsize=15, fontweight='bold')
     ax.set_ylabel('Net Value (Base=1.0)', fontsize=12)
     ax.legend(loc='upper left')
@@ -101,6 +111,14 @@ def plot_component_trends(prices_df, mdd_date, save_dir):
     ax.set_ylabel('Normalized Price', fontsize=12)
     ax.legend(loc='upper left', frameon=True)
     ax.axhline(100, color='black', linewidth=1)
+
+    # 增加刻度线密度：x轴(时间)使用 AutoDateLocator，y轴(数值)使用 MaxNLocator
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=10, maxticks=25))
+    ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
+
+    # 设置 X轴 和 Y轴 刻度数字的字体大小
+    ax.tick_params(axis='x', which='major', labelsize=8)
+    ax.tick_params(axis='y', which='major', labelsize=8)
     
     save_path = os.path.join(save_dir, 'component_trends.png')
     fig.tight_layout()
