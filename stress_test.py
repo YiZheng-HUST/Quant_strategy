@@ -105,25 +105,28 @@ if __name__ == "__main__":
     START = '2021-03-24'
     END = '2026-03-23'
 
-    # 抽取与清洗
+    # 数据抽取与清洗
     df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END)
     df_bond = load_and_standardize_bond_data(BOND_SYMBOLS, WORK_DIR, START, END)
     
     # 汇率转换
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     
-    # 运行策略引擎 (在这里，您可以自由切换再平衡开关，比如试着改成 rebalance_freq='Q' 看季度再平衡效果)
+    # 运行策略引擎（核心）
     portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M')
 
-    # 执行核心量化指标评测
+    # 计算最大回撤
     mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
     print(f"max_drawdown value: {mdd_value}, date: {mdd_date}")
 
+    # 计算夏普比率
     sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
     print(f"annualized_sharpe_ratio: {sharpe}")
     
-    # 生成图像
+    # 生成收益曲线
     mdd_trigger_date = plot_portfolio_performance(portfolio_res, WORK_DIR)
+
+    # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)
     
     print("\n[√] 核心系统运行完毕，请在当前目录检查图表。")
