@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 from datetime import datetime, timedelta
+from ETF_list import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 
 import logging
 
@@ -18,36 +19,6 @@ one_year_ago = today - timedelta(days=1825)
 START_DATE = one_year_ago.strftime("%Y%m%d")
 END_DATE = today.strftime("%Y%m%d")
 DATA_DIR = "raw_data/"
-
-# Define lists for Chinese ETFs
-A_SHARE_ETFS = {
-    "A_nasdaq_etf": "513300",  # 纳斯达克ETF
-    "A_sp500_etf": "513500",  # 标普500ETF
-    "A_red_low_volatility_50_etf": "515450",  # 红利低波50ETF
-    "A_red_etf_huatai": "510880",  # 红利ETF华泰柏瑞
-    "A_short_term_bond_etf": "511360",  # 短融ETF海富通
-    "A_huaan_gold_etf": "518880",  # 华安黄金ETF
-}
-
-# Define lists for American ETFs east money
-US_SHARE_ETFS_EASTMONEY = {
-    "nasdaq": "105.QQQ",
-    "sp500": "106.SPY",
-    "dow_jones": "106.DIA",
-    "gold": "106.GLD",
-    "short_term_treasury": "105.SHY",
-    "mid_term_treasury": "105.IEF",
-    "long_term_treasury": "105.TLT",
-}
-
-US_SHARE_ETFS_SINA = {
-    "nasdaq": "QQQ",
-    "sp500": "SPY",
-    "dow_jones": "DIA",
-    "gold": "GLD",
-    "short_term_treasury": "SHY",
-    "mid_term_treasury": "IEF",
-    "long_term_treasury": "TLT"}
 
 # Define data source
 DATA_SOURCE = ["eastmoney", # 东方财富
@@ -65,7 +36,8 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
     us_data = {}
 
     # Fetch A-Share ETFs
-    for name, symbol in a_etf_dict.items():
+    for name, item in a_etf_dict.items():
+        symbol = item["symbol"]
         file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             logging.info(f"Found local cache for A-share ETF {name}. Loading...")
@@ -97,7 +69,8 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
                 logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
     
     # Fetch US-Share ETFs
-    for name, symbol in us_etf_dict_eastmoney.items():
+    for name, item in us_etf_dict_eastmoney.items():
+        symbol = item["symbol"]
         file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             logging.info(f"Found local cache for US ETF {name}. Loading...")

@@ -23,7 +23,7 @@ def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str
     }
 
     for sym in symbols:
-        file_path = os.path.join(csv_dir, f"{sym}.csv")
+        file_path = os.path.join(csv_dir, f"{sym['symbol']}.csv")
         df = pd.read_csv(file_path)
         
         # 1. 表头清洗：先转小写，再匹配中文替换
@@ -39,7 +39,7 @@ def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str
         
         # 兼容不同数据源可能存在的命名
         close_col = 'close' if 'close' in df.columns else '收盘'
-        price_data[sym] = df[close_col]
+        price_data[sym['symbol']] = df[close_col]
 
     # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
     prices = pd.DataFrame(price_data)

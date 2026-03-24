@@ -9,14 +9,14 @@ from data_analysis_and_plot import calculate_max_drawdown, calculate_sharpe_rati
 
 
 # 全局定义区
-FOREIGN_SYMBOLS = [ US_SHARE_ETFS_SINA['nasdaq'], 
-                    US_SHARE_ETFS_SINA['sp500'], 
-                    US_SHARE_ETFS_SINA['dow_jones'], 
-                    US_SHARE_ETFS_SINA['gold'],
-                    US_SHARE_ETFS_EASTMONEY['nasdaq'], 
-                    US_SHARE_ETFS_EASTMONEY['sp500'], 
-                    US_SHARE_ETFS_EASTMONEY['dow_jones'], 
-                    US_SHARE_ETFS_EASTMONEY['gold'],]
+FOREIGN_SYMBOLS = [ US_SHARE_ETFS_SINA['nasdaq']['symbol'], 
+                    US_SHARE_ETFS_SINA['sp500']['symbol'], 
+                    US_SHARE_ETFS_SINA['dow_jones']['symbol'], 
+                    US_SHARE_ETFS_SINA['gold']['symbol'],
+                    US_SHARE_ETFS_EASTMONEY['nasdaq']['symbol'], 
+                    US_SHARE_ETFS_EASTMONEY['sp500']['symbol'], 
+                    US_SHARE_ETFS_EASTMONEY['dow_jones']['symbol'], 
+                    US_SHARE_ETFS_EASTMONEY['gold']['symbol'],]
 
 BOND_SYMBOLS = ['treasury_bonds_yield']
 
