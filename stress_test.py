@@ -4,52 +4,11 @@ import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
+from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data
+
 
 # 全局图表样式设置
 plt.style.use('seaborn-v0_8-whitegrid')
-
-# ==========================================
-# 数据读取、表头清洗与强制对齐
-# ==========================================
-def load_and_standardize_data(symbols: list, csv_dir: str, start_date: str, end_date: str):
-    price_data = {}
-    print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
-
-    # 中英文对照字典（可根据需要扩充）
-    header_mapping = {
-        '日期': 'date', 
-        '开盘': 'open', 
-        '收盘': 'close', 
-        '最高': 'high', 
-        '最低': 'low', 
-        '成交量': 'volume',
-    }
-
-    for sym in symbols:
-        file_path = os.path.join(csv_dir, f"{sym}.csv")
-        df = pd.read_csv(file_path)
-        
-        # 1. 表头清洗：先转小写，再匹配中文替换
-        df.columns = [col.lower() for col in df.columns]
-        df.rename(columns=header_mapping, inplace=True)
-        
-        # 2. 覆盖原始 CSV (保留清洗后的标准英文表头)
-        df.to_csv(file_path, index=False, encoding='utf-8-sig')
-        
-        # 3. 提取收盘价用于回测
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
-        
-        # 兼容不同数据源可能存在的命名
-        close_col = 'close' if 'close' in df.columns else '收盘'
-        price_data[sym] = df[close_col]
-
-    # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
-    prices = pd.DataFrame(price_data)
-    prices = prices.loc[start_date:end_date].ffill().bfill()
-    print("[+] 数据清洗与对齐完成。")
-    prices.to_csv(os.path.join(csv_dir, 'clean_data.csv'))
-    return prices
 
 # ==========================================
 # 汇率穿透引擎
@@ -229,12 +188,14 @@ if __name__ == "__main__":
     TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
     FOREIGN_SYMBOLS = [US_SHARE_ETFS_SINA['nasdaq'], US_SHARE_ETFS_SINA['sp500'], US_SHARE_ETFS_SINA['dow_jones'], US_SHARE_ETFS_SINA['gold'],
                        US_SHARE_ETFS_EASTMONEY['nasdaq'], US_SHARE_ETFS_EASTMONEY['sp500'], US_SHARE_ETFS_EASTMONEY['dow_jones'], US_SHARE_ETFS_EASTMONEY['gold'],]
+    BOND_SYMBOLS = ['treasury_bonds_yield']
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
     START = '2021-03-24'
     END = '2026-03-23'
 
     # 抽取与清洗
-    df_prices = load_and_standardize_data(TARGET_SYMBOLS, WORK_DIR, START, END)
+    df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END)
+    df_bond = load_and_standardize_bond_data(['treasury_bonds_yield'], WORK_DIR, START, END)
     
     # 汇率转换
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
