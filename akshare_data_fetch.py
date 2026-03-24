@@ -119,6 +119,25 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
                 us_data[name] = df
                 logging.info(f"Saved US-share ETF {symbol} data to {file_path}")
 
+    # Fetch China and US treasury bonds yield
+    name = "treasury_bonds_yield"
+    file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
+    if os.path.exists(file_path):
+        logging.info(f"Found local cache for treasury_bonds_yield {name}. Loading...")
+        us_data[name] = pd.read_csv(file_path)
+    else:
+        try:
+            logging.info(f"Fetching data for treasury_bonds_yield {symbol} from eastmoney ({start_date} - {end_date})...")
+            df = ak.bond_zh_us_rate(start_date=start_date)
+            time.sleep(random.uniform(1.0, 3.0)) # pause for 1-3 sec
+        except Exception as e:
+            logging.error(f"Failed to fetch data from eastmoney for {name}: {e}. All sources failed.")
+
+        if df is not None:
+            df.to_csv(file_path, index=False, encoding="utf-8-sig")
+            us_data[name] = df
+            logging.info(f"Saved treasury_bonds_yield {symbol} data to {file_path}")
+
     return a_data, us_data
 
 if __name__ == "__main__":
