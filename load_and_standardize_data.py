@@ -43,7 +43,10 @@ def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str
 
     # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
     prices = pd.DataFrame(price_data)
-    prices = prices.loc[start_date:end_date].ffill().bfill()
+    # 生成从 start_date 到 end_date 的连续自然日时间序列，检测并显露缺失日期
+    full_date_range = pd.date_range(start=start_date, end=end_date)
+    prices = prices.reindex(full_date_range).ffill().bfill()
+    prices.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
     prices.to_csv(os.path.join(csv_dir, 'clean_price_data.csv'))
     return prices
@@ -85,7 +88,10 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
     
     # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
     bond = pd.DataFrame(bond_data)
-    bond = bond.loc[start_date:end_date].ffill().bfill()
+    # 生成从 start_date 到 end_date 的连续自然日时间序列，检测并显露缺失日期
+    full_date_range = pd.date_range(start=start_date, end=end_date)
+    bond = bond.reindex(full_date_range).ffill().bfill()
+    bond.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
     bond.to_csv(os.path.join(csv_dir, 'clean_bond_data.csv'))
     return bond
