@@ -11,7 +11,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 # ==========================================
 # 数据读取、表头清洗与强制对齐
 # ==========================================
-def load_and_standardize_data(symbols, csv_dir, start_date, end_date):
+def load_and_standardize_data(symbols: list, csv_dir: str, start_date: str, end_date: str):
     price_data = {}
     print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
 
@@ -54,7 +54,7 @@ def load_and_standardize_data(symbols, csv_dir, start_date, end_date):
 # ==========================================
 # 汇率穿透引擎
 # ==========================================
-def apply_currency_conversion(prices_df, foreign_symbols, base_curr='USD', target_curr='CNY'):
+def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, base_curr: str='USD', target_curr: str='CNY'):
     """
     调用本地 ECB 数据，将指定的海外资产列转换为目标本币计价。
     """
@@ -224,17 +224,20 @@ def plot_component_trends(prices_df, mdd_date, save_dir):
 # ==========================================
 if __name__ == "__main__":
     # 配置参数
-    WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20250320-20260320/' 
-    TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
+    WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/' 
+    # TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
+    TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
+    FOREIGN_SYMBOLS = [US_SHARE_ETFS_SINA['nasdaq'], US_SHARE_ETFS_SINA['sp500'], US_SHARE_ETFS_SINA['dow_jones'], US_SHARE_ETFS_SINA['gold'],
+                       US_SHARE_ETFS_EASTMONEY['nasdaq'], US_SHARE_ETFS_EASTMONEY['sp500'], US_SHARE_ETFS_EASTMONEY['dow_jones'], US_SHARE_ETFS_EASTMONEY['gold'],]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
-    START = '2025-03-20'
-    END = '2026-03-20'
+    START = '2021-03-24'
+    END = '2026-03-23'
 
     # 抽取与清洗
     df_prices = load_and_standardize_data(TARGET_SYMBOLS, WORK_DIR, START, END)
     
     # 汇率转换
-    df_prices = apply_currency_conversion(df_prices, foreign_symbols=US_SHARE_ETFS_SINA['nasdaq'])
+    df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     
     # 运行策略引擎 (在这里，您可以自由切换再平衡开关，比如试着改成 rebalance_freq='Q' 看季度再平衡效果)
     portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M')
