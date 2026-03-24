@@ -20,9 +20,10 @@ FOREIGN_SYMBOLS = [ US_SHARE_ETFS_SINA['nasdaq']['symbol'],
 
 BOND_SYMBOLS = ['treasury_bonds_yield']
 
-FRICTION_COST = {"stamp_duty": 0.0005,  # 印花税，卖出单向收取
-                 "transfer_fee": 0.00001,   # 过户费，双向收取
-                 "regulatory_fee": 0.0000687}  # 交易规费，双向收取
+FRICTION_COST = {   "commission": 0.00005, # 券商佣金，双向收取
+                    "stamp_duty": 0,  # 印花税，卖出单向收取
+                    "transfer_fee": 0.00001,   # 过户费，双向收取
+                    "regulatory_fee": 0.0000687}  # 交易规费，双向收取
 
 
 # ==========================================
@@ -99,8 +100,8 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
                 # 卖出成本（印花税，单向）
                 sell_cost = turnover_weight * friction_costs["stamp_duty"]
 
-                # 双向成本（过户费 + 交易规费），乘以2因为买卖都收
-                round_trip_cost = turnover_weight * 2 * (friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
+                # 双向成本（券商佣金 + 过户费 + 交易规费），乘以2因为买卖都收
+                round_trip_cost = turnover_weight * 2 * (friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
 
                 # 从当日净值中扣除总摩擦成本
                 total_friction_ratio = sell_cost + round_trip_cost
