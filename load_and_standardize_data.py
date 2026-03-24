@@ -55,14 +55,14 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
         # 中英文对照字典（可根据需要扩充）
     header_mapping = {
         '日期': 'date',
-        '中国国债收益率2年': 'two_years_China_bond_rate',
-        '中国国债收益率5年': 'five_years_China_bond_rate',
-        '中国国债收益率10年': 'ten_years_China_bond_rate',
-        '中国国债收益率30年': 'thirty_years_China_bond_rate',
-        '美国国债收益率2年': 'two_years_US_bond_rate',
-        '美国国债收益率5年': 'five_years_US_bond_rate',
-        '美国国债收益率10年': 'ten_years_US_bond_rate',
-        '美国国债收益率30年': 'thirty_years_US_bond_rate',
+        '中国国债收益率2年': 'two_years_china_bond_rate',
+        '中国国债收益率5年': 'five_years_china_bond_rate',
+        '中国国债收益率10年': 'ten_years_china_bond_rate',
+        '中国国债收益率30年': 'thirty_years_china_bond_rate',
+        '美国国债收益率2年': 'two_years_us_bond_rate',
+        '美国国债收益率5年': 'five_years_us_bond_rate',
+        '美国国债收益率10年': 'ten_years_us_bond_rate',
+        '美国国债收益率30年': 'thirty_years_us_bond_rate',
     }
 
     for sym in symbols:
@@ -76,13 +76,12 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
         # 2. 覆盖原始 CSV (保留清洗后的标准英文表头)
         df.to_csv(file_path, index=False, encoding='utf-8-sig')
         
-        # 3. 提取收盘价用于回测
+        # 3. 设置index为date
         df['date'] = pd.to_datetime(df['date'])
         df.set_index('date', inplace=True)
         
-        # 兼容不同数据源可能存在的命名
-        years_col = 'two_years_China_bond_rate'
-        bond_data[sym] = df[years_col]
+        # 4. 提取两年期国债收益率曲线
+        bond_data[sym] = df[header_mapping['中国国债收益率2年']]
     
     # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
     bond = pd.DataFrame(bond_data)
