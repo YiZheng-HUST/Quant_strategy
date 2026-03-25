@@ -79,7 +79,7 @@ def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=
 # ==========================================
 # 可视化 - 总体资产体检图
 # ==========================================
-def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, work_dir):
+def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, weights, asset_names, work_dir):
     import matplotlib.pyplot as plt
     import os
     
@@ -98,11 +98,14 @@ def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, s
     ax.plot(portfolio_res.index, portfolio_res.values, 
              label='My Portfolio', color='red', linewidth=2.5, zorder=5)
 
+    # 格式化权重信息
+    weights_str = "\n".join([f" - {name}: {w:.0%}" for name, w in zip(asset_names, weights)])
     # 3. 在图表上标注最大回撤、夏普比率等关键指标
     info_text = (f"Max Drawdown: {mdd_value:.2%}\n"
                  f"MDD Date: {mdd_date}\n"
                  f"Sharpe Ratio: {sharpe:.2f}\n"
-                 f"Sortino Ratio: {sortino:.2f}")
+                 f"Sortino Ratio: {sortino:.2f}\n"
+                 f"Weights:\n{weights_str}")
 
     
     # 借助 bbox 绘制一个白色半透明的信息悬浮框，放置在左上角

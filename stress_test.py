@@ -60,13 +60,14 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST):
+def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
     annual_fees: list, 各ETF对应的年化费用率列表
     """
-    print(f"[*] 启动回测引擎... (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})")
+    if verbose:
+        print(f"[*] 启动回测引擎... (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})")
     
     daily_returns = prices_df.pct_change().dropna()
     portfolio_value = [1.0]
@@ -122,6 +123,24 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     return portfolio_series
 
+def generate_weights(num_assets, step=0.01):
+    steps = int(round(1.0 / step))
+    def _generate(remaining_steps, remaining_assets):
+        if remaining_assets == 1:
+            yield [round(remaining_steps * step, 2)]
+            return
+        for i in range(remaining_steps + 1):
+            for tail in _generate(remaining_steps - i, remaining_assets - 1):
+                yield [round(i * step, 2)] + tail
+    yield from _generate(steps, num_assets)
+
+# ==========================================
+# 策略优化搜索：寻找最佳权重组合
+# ==========================================
+def evaluate_portfolio(mdd_val, shp, srt):
+    # 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
+    return (mdd_val > -0.10) and (shp > 0.8) and (srt > 1.0)
+
 # ==========================================
 # 主程序执行入口 (Main Execution)
 # ==========================================
@@ -151,21 +170,31 @@ if __name__ == "__main__":
     # 汇率转换
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     df_compare = apply_currency_conversion(df_compare, foreign_symbols=FOREIGN_SYMBOLS)
-    
-    # 运行策略引擎（核心）
-    portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST)
 
-    # 计算最大回撤
-    mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-
-    # 计算夏普比率
-    sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
-
-    # 计算索提诺比率
-    sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
+    print(f"\n[*] 开始搜索满足条件的权重组合 (MDD < 10%, Sharpe > 0.8, Sortino > 1.0)...")
+    found = False
+    for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
+        portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=False)
+        
+        mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
+        sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
+        sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
+        
+        if evaluate_portfolio(mdd_value, sharpe, sortino):
+            print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Sharpe: {sharpe:.2f}, Sortino: {sortino:.2f}")
+            WEIGHTS = test_weights
+            found = True
+            break
+            
+    if not found:
+        print("[-] 遍历完毕，未找到满足条件的权重组合。使用默认权重作图。")
+        portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=True)
+        mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
+        sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
+        sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
     
     # 生成收益曲线，传入对照组及评价指标
-    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, WORK_DIR)
+    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, WEIGHTS, df_prices.columns, WORK_DIR)
 
     # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)
