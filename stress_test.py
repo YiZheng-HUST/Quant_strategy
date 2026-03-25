@@ -149,14 +149,14 @@ if __name__ == "__main__":
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
 
     # 选择投资组合与权重
-    TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_low_volatility_50_etf'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
+    TARGET_SYMBOLS = [A_SHARE_ETFS['short_term_bond_haifutong_etf'], A_SHARE_ETFS['red_huatai_etf'], A_SHARE_ETFS['nasdaq_guangfa_etf'], A_SHARE_ETFS['gold_huaan_etf']]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
 
     # 提取各 ETF 的年化费用 (A股为管理费+托管费，美股为总费用)
     ANNUAL_FEES = [etf.get('total_fee', etf.get('management_fee', 0.0) + etf.get('trustee_fee', 0.0)) for etf in TARGET_SYMBOLS]
 
     # 选择对照组
-    COMPARE_SYMBOLS = [A_SHARE_ETFS['A_hushen_300_huatai_etf'], US_SHARE_ETFS_SINA['sp500']]
+    COMPARE_SYMBOLS = [A_SHARE_ETFS['csi_300_huatai_etf'], US_SHARE_ETFS_SINA['sp500']]
 
     # 设置日期
     START = '2021-03-24'
