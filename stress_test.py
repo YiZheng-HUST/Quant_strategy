@@ -60,10 +60,11 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST):
+def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
+    annual_fees: list, 各ETF对应的年化费用率列表
     """
     print(f"[*] 启动回测引擎... (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})")
     
@@ -76,9 +77,16 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
     periods = daily_returns.index.to_period(rebalance_freq)
 
     for i in range(len(daily_returns)):
+        asset_returns = daily_returns.iloc[i].values
+
+        # 将年化费用均摊到252个交易日中并作为摩擦损耗扣除
+        if annual_fees is not None:
+            daily_fees = np.array(annual_fees) / 252.0
+            asset_returns = asset_returns - daily_fees
+
         # 1. 计算当日总体涨跌幅
         # 权重 * 每日收益率
-        today_return = np.sum(current_weights * daily_returns.iloc[i].values)
+        today_return = np.sum(current_weights * asset_returns)
         
         # 2. 累加净值
         new_value = portfolio_value[-1] * (1 + today_return)
@@ -86,7 +94,7 @@ def run_backtest_engine(prices_df, initial_weights, enable_rebalance=True, rebal
         portfolio_value.append(new_value)
         
         # 3. 权重自然漂移
-        current_weights = current_weights * (1 + daily_returns.iloc[i].values) / (1 + today_return)
+        current_weights = current_weights * (1 + asset_returns) / (1 + today_return)
         
         # 4. 机械化再平衡指令拦截
         if enable_rebalance and i < len(daily_returns) - 1:
@@ -123,6 +131,8 @@ if __name__ == "__main__":
     # TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
     TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
+    # 提取各 ETF 的年化费用 (A股为管理费+托管费，美股为总费用)
+    ANNUAL_FEES = [etf.get('total_fee', etf.get('management_fee', 0.0) + etf.get('trustee_fee', 0.0)) for etf in TARGET_SYMBOLS]
     START = '2021-03-24'
     END = '2026-03-23'
 
@@ -134,7 +144,7 @@ if __name__ == "__main__":
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     
     # 运行策略引擎（核心）
-    portfolio_res = run_backtest_engine(df_prices, WEIGHTS, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST)
+    portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST)
 
     # 计算最大回撤
     mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
