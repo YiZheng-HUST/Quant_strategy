@@ -8,7 +8,7 @@ import os
 # ==========================================
 # 数据读取、表头清洗与强制对齐
 # ==========================================
-def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str, end_date: str):
+def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str, end_date: str, name: str):
     price_data = {}
     print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
 
@@ -48,10 +48,10 @@ def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str
     prices = prices.reindex(full_date_range).ffill().bfill()
     prices.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
-    prices.to_csv(os.path.join(csv_dir, 'clean_price_data.csv'))
+    prices.to_csv(os.path.join(csv_dir, f'{name}.csv'))
     return prices
 
-def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str, end_date: str):
+def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str, end_date: str, name: str):
     bond_data = {}
     print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
 
@@ -93,5 +93,5 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
     bond = bond.reindex(full_date_range).ffill().bfill()
     bond.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
-    bond.to_csv(os.path.join(csv_dir, 'clean_bond_data.csv'))
+    bond.to_csv(os.path.join(csv_dir, f'{name}.csv'))
     return bond

@@ -127,21 +127,30 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
 # ==========================================
 if __name__ == "__main__":
     # 配置参数
-    WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/' 
-    # TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], US_SHARE_ETFS_SINA['nasdaq'], A_SHARE_ETFS['A_huaan_gold_etf']]
+    WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
+
+    # 选择投资组合与权重
     TARGET_SYMBOLS = [A_SHARE_ETFS['A_short_term_bond_etf'], A_SHARE_ETFS['A_red_etf_huatai'], A_SHARE_ETFS['A_nasdaq_etf'], A_SHARE_ETFS['A_huaan_gold_etf']]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
+
     # 提取各 ETF 的年化费用 (A股为管理费+托管费，美股为总费用)
     ANNUAL_FEES = [etf.get('total_fee', etf.get('management_fee', 0.0) + etf.get('trustee_fee', 0.0)) for etf in TARGET_SYMBOLS]
+
+    # 选择对照组
+    COMPARE_SYMBOLS = [A_SHARE_ETFS['A_hushen_300_huatai_etf'], US_SHARE_ETFS_SINA['sp500']]
+
+    # 设置日期
     START = '2021-03-24'
     END = '2026-03-23'
 
     # 数据抽取与清洗
-    df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END)
-    df_bond = load_and_standardize_bond_data(BOND_SYMBOLS, WORK_DIR, START, END)
+    df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END, "clean_target_data")
+    df_bond = load_and_standardize_bond_data(BOND_SYMBOLS, WORK_DIR, START, END, 'clean_bond_data')
+    df_compare = load_and_standardize_price_data(COMPARE_SYMBOLS, WORK_DIR, START, END, "clean_compare_data")
     
     # 汇率转换
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
+    df_compare = apply_currency_conversion(df_compare, foreign_symbols=FOREIGN_SYMBOLS)
     
     # 运行策略引擎（核心）
     portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST)
@@ -154,8 +163,8 @@ if __name__ == "__main__":
     sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
     print(f"annualized_sharpe_ratio: {sharpe}")
     
-    # 生成收益曲线
-    mdd_trigger_date = plot_portfolio_performance(portfolio_res, WORK_DIR)
+    # 生成收益曲线，传入对照组及评价指标
+    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, WORK_DIR)
 
     # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)

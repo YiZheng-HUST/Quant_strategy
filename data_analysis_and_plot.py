@@ -50,26 +50,51 @@ def calculate_sharpe_ratio(portfolio_series, risk_free_rate=0.02, trading_days=2
 # ==========================================
 # 可视化 - 总体资产体检图
 # ==========================================
-def plot_portfolio_performance(portfolio_series, save_dir):
-    """
-    绘制整体资金曲线及回撤阴影，并标记最大回撤点。
-    """
-    rolling_max = portfolio_series.cummax()
-    drawdown = (portfolio_series - rolling_max) / rolling_max
-    max_drawdown = drawdown.min()
-    mdd_date = drawdown.idxmin()
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(portfolio_series.index, portfolio_series, label='Portfolio Net Value', color='#1f77b4', linewidth=2.5)
-    ax.fill_between(drawdown.index, rolling_max, portfolio_series, color='red', alpha=0.3, label='Drawdown Area')
+def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, work_dir):
+    import matplotlib.pyplot as plt
+    import os
     
-    ax.scatter(mdd_date, portfolio_series.loc[mdd_date], color='red', s=100, zorder=5)
-    ax.annotate(f'MDD: {max_drawdown*100:.2f}%\n({mdd_date.date()})', 
-                xy=(mdd_date, portfolio_series.loc[mdd_date]), 
-                xytext=(-100, -40), textcoords='offset points',
-                arrowprops=dict(arrowstyle='->', color='red'), color='red', fontweight='bold')
+    fig, ax = plt.subplots(figsize=(19.2, 10.8))
+    # 1. 绘制对照组（基准）资产并做归一化处理（计算为起始净值为1.0的曲线）
+    if df_compare is not None and not df_compare.empty:
+        for col in df_compare.columns:
+            benchmark_series = df_compare[col].dropna()
+            if not benchmark_series.empty:
+                # 归一化：每日价格 / 初始价格
+                normalized_benchmark = benchmark_series / benchmark_series.iloc[0]
+                ax.plot(normalized_benchmark.index, normalized_benchmark.values, 
+                         label=f'Benchmark: {col}', alpha=0.6, linestyle='--')
 
-    # 增加刻度线密度：x轴(时间)使用 AutoDateLocator，y轴(数值)使用 MaxNLocator
+    # 2. 绘制你的投资组合净值曲线 (加粗并前置 zorder)
+    ax.plot(portfolio_res.index, portfolio_res.values, 
+             label='My Portfolio', color='red', linewidth=2.5, zorder=5)
+
+    # 3. 在图表上标注最大回撤、夏普比率等关键指标
+    info_text = (f"Max Drawdown: {mdd_value:.2%}\n"
+                 f"MDD Date: {mdd_date}\n"
+                 f"Sharpe Ratio: {sharpe:.2f}")
+
+    
+    # 借助 bbox 绘制一个白色半透明的信息悬浮框，放置在左上角
+    ax.text(0.02, 0.95, info_text, transform=ax.transAxes, fontsize=11,
+                   verticalalignment='top', 
+                   bbox=dict(boxstyle='round,pad=0.5', facecolor='white', alpha=0.8, edgecolor='gray'))
+    
+    # 4. (可选) 在最大回撤日绘制特殊的标记点和箭头
+    if mdd_date in portfolio_res.index:
+        mdd_y = portfolio_res.loc[mdd_date]
+        ax.scatter([mdd_date], [mdd_y], color='blue', s=60, zorder=6)
+        ax.annotate('Max Drawdown', xy=(mdd_date, mdd_y), xytext=(15, -30),
+                     textcoords='offset points', 
+                     arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=.2", color='blue'))
+
+    ax.set_title('Portfolio Performance vs Benchmarks')
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Normalized Value (Base=1.0)')
+    ax.legend(loc='upper right')
+    ax.grid(True, linestyle=':', alpha=0.7)
+
+    # 增加刻度线密度
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=10, maxticks=25))
     ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=15))
 
@@ -77,16 +102,14 @@ def plot_portfolio_performance(portfolio_series, save_dir):
     ax.tick_params(axis='x', which='major', labelsize=8)
     ax.tick_params(axis='y', which='major', labelsize=8)
 
-    ax.set_title('Figure 1: Total Portfolio Performance', fontsize=15, fontweight='bold')
-    ax.set_ylabel('Net Value (Base=1.0)', fontsize=12)
-    ax.legend(loc='upper left')
-    
-    save_path = os.path.join(save_dir, 'portfolio_performance.png')
     fig.tight_layout()
-    fig.savefig(save_path, dpi=300)
-    plt.close(fig) # 释放内存
-    print(f"[+] 图 1 已保存至: {save_path}")
-    return mdd_date # 返回最大回撤日期供图 2 使用
+    
+    # 保存图像
+    save_path = os.path.join(work_dir, "portfolio_performance.png")
+    fig.savefig(save_path, dpi=100)
+    plt.close(fig)
+    
+    return mdd_date
 
 # ==========================================
 # 可视化 - 成分股崩塌透视图
@@ -97,7 +120,7 @@ def plot_component_trends(prices_df, mdd_date, save_dir):
     """
     normalized_prices = prices_df / prices_df.iloc[0] * 100
     
-    fig, ax = plt.subplots(figsize=(12, 6))
+    fig, ax = plt.subplots(figsize=(19.2, 10.8))
     colors = ['#2ca02c', '#ff7f0e', '#9467bd', '#bcbd22']
     
     for i, sym in enumerate(prices_df.columns):
@@ -122,6 +145,6 @@ def plot_component_trends(prices_df, mdd_date, save_dir):
     
     save_path = os.path.join(save_dir, 'component_trends.png')
     fig.tight_layout()
-    fig.savefig(save_path, dpi=300)
+    fig.savefig(save_path, dpi=100)
     plt.close(fig)
     print(f"[+] 图 2 已保存至: {save_path}")
