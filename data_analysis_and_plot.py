@@ -5,6 +5,7 @@ from currency_converter import CurrencyConverter
 import os
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
+from typing import Tuple, Optional, Iterable
 
 
 # 全局图表样式设置
@@ -13,7 +14,7 @@ plt.style.use('seaborn-v0_8-whitegrid')
 # ==========================================
 # 核心量化指标评测 (纯计算无图表)
 # ==========================================
-def calculate_max_drawdown(portfolio_series):
+def calculate_max_drawdown(portfolio_series: pd.Series) -> Tuple[float, pd.Timestamp, pd.Series]:
     """
     计算最大回撤及其发生的精确日期。
     返回: max_drawdown (负数), mdd_date (日期), drawdown_series (每日回撤序列)
@@ -25,7 +26,7 @@ def calculate_max_drawdown(portfolio_series):
     return max_drawdown, mdd_date, drawdown_series
 
 
-def calculate_rolling_sharpe_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
+def calculate_rolling_sharpe_ratio(portfolio_series: pd.Series, risk_free_rate: float = 0.02, trading_days: int = 252) -> pd.Series:
     """
     计算滚动夏普比率（窗口为 trading_days）的均值。
     risk_free_rate: 无风险利率基准（默认2%）
@@ -52,7 +53,7 @@ def calculate_rolling_sharpe_ratio(portfolio_series, risk_free_rate=0.02, tradin
     return rolling_sharpe
 
 
-def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
+def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: float = 0.02, trading_days: int = 252) -> float:
     """
     计算年化索提诺比率。
     risk_free_rate: 无风险利率基准（默认2%）
@@ -82,7 +83,7 @@ def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=
     return sortino_ratio
 
 
-def calculate_underwater_time(portfolio_series):
+def calculate_underwater_time(portfolio_series: pd.Series) -> int:
     """
     计算净值从创新高到再次创新高所需的时间（水下时间），返回统计周期中的最大值。
     """
@@ -110,7 +111,7 @@ def calculate_underwater_time(portfolio_series):
 # ==========================================
 # 可视化 - 总体资产体检图
 # ==========================================
-def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, weights, asset_names, work_dir):
+def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd.DataFrame], mdd_value: float, mdd_date: pd.Timestamp, sharpe: float, sortino: float, weights: Iterable[float], asset_names: Iterable[str], work_dir: str) -> pd.Timestamp:
     import matplotlib.pyplot as plt
     import os
     
@@ -178,7 +179,7 @@ def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, s
 # ==========================================
 # 可视化 - 成分股崩塌透视图
 # ==========================================
-def plot_component_trends(prices_df, mdd_date, save_dir):
+def plot_component_trends(prices_df: pd.DataFrame, mdd_date: pd.Timestamp, save_dir: str) -> None:
     """
     绘制所有成分资产的归一化走势，并切入回撤基准线。
     """
