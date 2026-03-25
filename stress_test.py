@@ -5,7 +5,7 @@ from currency_converter import CurrencyConverter
 import os
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data
-from data_analysis_and_plot import calculate_max_drawdown, calculate_sharpe_ratio, calculate_sortino_ratio, plot_portfolio_performance, plot_component_trends
+from data_analysis_and_plot import calculate_max_drawdown, calculate_rolling_sharpe_ratio, calculate_sortino_ratio, calculate_underwater_time, plot_portfolio_performance, plot_component_trends
 
 
 # 全局定义区
@@ -137,9 +137,28 @@ def generate_weights(num_assets, step=0.01):
 # ==========================================
 # 策略优化搜索：寻找最佳权重组合
 # ==========================================
-def evaluate_portfolio(mdd_val, shp, srt):
-    # 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
-    return (mdd_val > -0.10) and (shp > 0.8) and (srt > 1.0)
+def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int):
+    """
+    评估投资组合表现是否满足预设标准。
+    - 条件1: 最大回撤小于10%
+    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.5
+    - 条件3: 索提诺比率大于1.0
+    - 条件4: 最大水下时间小于365天
+    """
+    # 条件1: 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
+    cond1 = mdd_val > -0.10
+
+    # 条件2: 滚动夏普比率有80%的时间在0.5以上
+    # shp是Series, (shp > 0.5)会返回一个布尔Series, .mean()计算True的比例
+    cond2 = (shp > 0.5).mean() >= 0.8
+
+    # 条件3: 索提诺比率大于1.0
+    cond3 = srt > 1.0
+
+    # 条件4: 最大水下时间小于365天
+    cond4 = underwater < 365
+
+    return cond1 and cond2 and cond3 and cond4
 
 # ==========================================
 # 主程序执行入口 (Main Execution)
@@ -171,17 +190,18 @@ if __name__ == "__main__":
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     df_compare = apply_currency_conversion(df_compare, foreign_symbols=FOREIGN_SYMBOLS)
 
-    print(f"\n[*] 开始搜索满足条件的权重组合 (MDD < 10%, Sharpe > 0.8, Sortino > 1.0)...")
+    print(f"\n[*] 开始搜索满足条件的权重组合 (MDD < 10%, Sharpe(80% > 0.5), Sortino > 1.0, Underwater < 365d)...")
     found = False
     for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
         portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=False)
         
         mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-        sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
+        rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
         sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
+        underwater_days = calculate_underwater_time(portfolio_res)
         
-        if evaluate_portfolio(mdd_value, sharpe, sortino):
-            print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Sharpe: {sharpe:.2f}, Sortino: {sortino:.2f}")
+        if evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days):
+            print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}")
             WEIGHTS = test_weights
             found = True
             break
@@ -190,11 +210,11 @@ if __name__ == "__main__":
         print("[-] 遍历完毕，未找到满足条件的权重组合。使用默认权重作图。")
         portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=True)
         mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-        sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
+        rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
         sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
     
     # 生成收益曲线，传入对照组及评价指标
-    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, WEIGHTS, df_prices.columns, WORK_DIR)
+    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, WEIGHTS, df_prices.columns, WORK_DIR)
 
     # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)

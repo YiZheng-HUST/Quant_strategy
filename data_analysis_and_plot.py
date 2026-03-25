@@ -24,28 +24,33 @@ def calculate_max_drawdown(portfolio_series):
     mdd_date = drawdown_series.idxmin()
     return max_drawdown, mdd_date, drawdown_series
 
-def calculate_sharpe_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
+
+def calculate_rolling_sharpe_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
     """
-    计算年化夏普比率。
+    计算滚动夏普比率（窗口为 trading_days）的均值。
     risk_free_rate: 无风险利率基准（默认2%）
-    trading_days: 一年交易天数（默认252天）
+    trading_days: 滚动时间窗口及一年交易天数（默认252天）
     """
     # 逆向推导组合的每日涨跌幅
     daily_returns = portfolio_series.pct_change().dropna()
     
-    # 计算年化收益率 (CAGR)
-    total_return = portfolio_series.iloc[-1] / portfolio_series.iloc[0]
-    annualized_return = total_return ** (trading_days / len(portfolio_series)) - 1
+    # 如果数据不足一个完整的滚动窗口，直接报错
+    if len(portfolio_series) <= trading_days:
+        raise ValueError(f"portfolio_series len = {len(portfolio_series)}, less than trading_days = {trading_days}")
+
+    # 1. 计算滚动一年的收益率 (相隔 trading_days 的变化率)
+    rolling_return = portfolio_series.pct_change(periods=trading_days).dropna()
     
-    # 计算年化波动率
-    annualized_vol = daily_returns.std() * np.sqrt(trading_days)
+    # 2. 计算滚动一年的年化波动率
+    rolling_vol = daily_returns.rolling(window=trading_days).std().dropna() * np.sqrt(trading_days)
+    rolling_vol = rolling_vol.replace(0, np.nan) # 防止绝对无波动时除以 0
     
-    # 容错处理：防止组合绝对无波动导致除以零
-    if annualized_vol == 0:
-        return 0.0
-        
-    sharpe_ratio = (annualized_return - risk_free_rate) / annualized_vol
-    return sharpe_ratio
+    # 3. 得到滚动夏普比率序列，利用 Pandas 索引自动对齐相除
+    rolling_sharpe = (rolling_return - risk_free_rate) / rolling_vol
+
+    # 返回滚动夏普序列的均值作为最终评价指标
+    return rolling_sharpe
+
 
 def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
     """
@@ -75,6 +80,32 @@ def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=
         
     sortino_ratio = (annualized_return - risk_free_rate) / downside_vol
     return sortino_ratio
+
+
+def calculate_underwater_time(portfolio_series):
+    """
+    计算净值从创新高到再次创新高所需的时间（水下时间），返回统计周期中的最大值。
+    """
+    peak_dates = []  # 记录每个创新高的时间点
+    underwater_durations = []  # 记录每次水下持续的时间
+
+    # 1. 找到所有创新高的时间点
+    rolling_max = portfolio_series.cummax()
+    is_new_peak = portfolio_series == rolling_max
+    peak_dates = portfolio_series[is_new_peak].index.tolist()
+
+    # 2. 计算每次创新高后，到下一次创新高之间的时间差
+    for i in range(len(peak_dates) - 1):
+        time_delta = peak_dates[i+1] - peak_dates[i]
+        underwater_durations.append(time_delta.days)  # 转换为天数
+
+    # 3. 返回最大水下持续时间 (如果列表为空，则说明一直创新高，返回 0)
+    if underwater_durations:
+        max_underwater_time = max(underwater_durations)
+    else:
+        max_underwater_time = 0
+
+    return max_underwater_time
 
 # ==========================================
 # 可视化 - 总体资产体检图
