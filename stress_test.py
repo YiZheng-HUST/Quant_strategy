@@ -168,7 +168,7 @@ if __name__ == "__main__":
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
 
     # 选择投资组合与权重
-    TARGET_SYMBOLS = [A_SHARE_ETFS['short_term_bond_haifutong_etf'], A_SHARE_ETFS['red_huatai_etf'], A_SHARE_ETFS['nasdaq_guangfa_etf'], A_SHARE_ETFS['gold_huaan_etf']]
+    TARGET_SYMBOLS = [A_SHARE_ETFS['short_term_bond_haifutong_etf'], A_SHARE_ETFS['red_low_volatility_50_nanfang_etf'], A_SHARE_ETFS['nasdaq_huaxia_etf'], A_SHARE_ETFS['gold_huaan_etf']]
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
 
     # 提取各 ETF 的年化费用 (A股为管理费+托管费，美股为总费用)
@@ -207,11 +207,8 @@ if __name__ == "__main__":
             break
             
     if not found:
-        print("[-] 遍历完毕，未找到满足条件的权重组合。使用默认权重作图。")
-        portfolio_res = run_backtest_engine(df_prices, WEIGHTS, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=True)
-        mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-        rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
-        sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
+        print("[-] 遍历完毕，未找到满足条件的权重组合。")
+        exit(0)
     
     # 生成收益曲线，传入对照组及评价指标
     mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, WEIGHTS, df_prices.columns, WORK_DIR)
