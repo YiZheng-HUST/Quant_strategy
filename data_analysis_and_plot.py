@@ -47,10 +47,39 @@ def calculate_sharpe_ratio(portfolio_series, risk_free_rate=0.02, trading_days=2
     sharpe_ratio = (annualized_return - risk_free_rate) / annualized_vol
     return sharpe_ratio
 
+def calculate_sortino_ratio(portfolio_series, risk_free_rate=0.02, trading_days=252):
+    """
+    计算年化索提诺比率。
+    risk_free_rate: 无风险利率基准（默认2%）
+    trading_days: 一年交易天数（默认252天）
+    """
+    # 逆向推导组合的每日涨跌幅
+    daily_returns = portfolio_series.pct_change().dropna()
+    
+    # 计算年化收益率 (CAGR)
+    total_return = portfolio_series.iloc[-1] / portfolio_series.iloc[0]
+    annualized_return = total_return ** (trading_days / len(portfolio_series)) - 1
+    
+    # 将年化无风险利率折算为每日基准
+    daily_rf = (1 + risk_free_rate) ** (1 / trading_days) - 1
+    
+    # 计算下行落差 (如果当日收益大于 daily_rf，则记为0)
+    downside_diff = np.minimum(0, daily_returns - daily_rf)
+    
+    # 计算年化下行波动率
+    downside_vol = np.sqrt(np.mean(downside_diff ** 2)) * np.sqrt(trading_days)
+    
+    # 容错处理：防止无下行波动导致除以零
+    if downside_vol == 0:
+        return 0.0
+        
+    sortino_ratio = (annualized_return - risk_free_rate) / downside_vol
+    return sortino_ratio
+
 # ==========================================
 # 可视化 - 总体资产体检图
 # ==========================================
-def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, work_dir):
+def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, work_dir):
     import matplotlib.pyplot as plt
     import os
     
@@ -72,7 +101,8 @@ def plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, s
     # 3. 在图表上标注最大回撤、夏普比率等关键指标
     info_text = (f"Max Drawdown: {mdd_value:.2%}\n"
                  f"MDD Date: {mdd_date}\n"
-                 f"Sharpe Ratio: {sharpe:.2f}")
+                 f"Sharpe Ratio: {sharpe:.2f}\n"
+                 f"Sortino Ratio: {sortino:.2f}")
 
     
     # 借助 bbox 绘制一个白色半透明的信息悬浮框，放置在左上角

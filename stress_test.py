@@ -5,7 +5,7 @@ from currency_converter import CurrencyConverter
 import os
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data
-from data_analysis_and_plot import calculate_max_drawdown, calculate_sharpe_ratio, plot_portfolio_performance, plot_component_trends
+from data_analysis_and_plot import calculate_max_drawdown, calculate_sharpe_ratio, calculate_sortino_ratio, plot_portfolio_performance, plot_component_trends
 
 
 # 全局定义区
@@ -157,14 +157,15 @@ if __name__ == "__main__":
 
     # 计算最大回撤
     mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-    print(f"max_drawdown value: {mdd_value}, date: {mdd_date}")
 
     # 计算夏普比率
     sharpe = calculate_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
-    print(f"annualized_sharpe_ratio: {sharpe}")
+
+    # 计算索提诺比率
+    sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
     
     # 生成收益曲线，传入对照组及评价指标
-    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, WORK_DIR)
+    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, sharpe, sortino, WORK_DIR)
 
     # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)
