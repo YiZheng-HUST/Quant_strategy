@@ -76,6 +76,7 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
             logging.info(f"Found local cache for US ETF {name}. Loading...")
             us_data[name] = pd.read_csv(file_path)
         else:
+            df = None
             try:
                 logging.info(f"Fetching data for US ETF {symbol} from eastmoney ({start_date} - {end_date})...")
                 df = ak.stock_us_hist(symbol=symbol, period="daily", start_date=start_date, end_date=end_date, adjust="qfq")
@@ -83,9 +84,12 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
             except Exception as e:
                 logging.warning(f"Failed to fetch data from eastmoney for {symbol}: {e}. Trying sina...")
                 symbol = us_etf_dict_sina[name] # sina symbol is different
-                logging.info(f"Fetching data for US ETF {symbol} from sina ({start_date} - {end_date})...")
-                df = ak.stock_us_daily(symbol=symbol, adjust="qfq")
-                time.sleep(random.uniform(1.0, 3.0)) # pause for 1-3 sec
+                try:
+                    logging.info(f"Fetching data for US ETF {symbol} from sina ({start_date} - {end_date})...")
+                    df = ak.stock_us_daily(symbol=symbol, adjust="qfq")
+                    time.sleep(random.uniform(1.0, 3.0)) # pause for 1-3 sec
+                except Exception as e2:
+                    logging.error(f"Failed to fetch data from sina for {symbol}: {e2}. All sources failed.")
 
             if df is not None:
                 df.to_csv(file_path, index=False, encoding="utf-8-sig")
@@ -99,6 +103,7 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
         logging.info(f"Found local cache for treasury_bonds_yield {name}. Loading...")
         us_data[name] = pd.read_csv(file_path)
     else:
+        df = None
         try:
             logging.info(f"Fetching data for treasury_bonds_yield {symbol} from eastmoney ({start_date} - {end_date})...")
             df = ak.bond_zh_us_rate(start_date=start_date)
