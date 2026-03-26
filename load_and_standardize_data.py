@@ -9,6 +9,12 @@ import os
 # 数据读取、表头清洗与强制对齐
 # ==========================================
 def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str, end_date: str, name: str):
+    target_path = os.path.join(csv_dir, f"{name}.csv")
+    if os.path.exists(target_path):
+        print(f"[*] 发现已清洗的缓存文件 {target_path}，直接读取...")
+        prices = pd.read_csv(target_path, index_col='date', parse_dates=True)
+        return prices
+
     price_data = {}
     print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
 
@@ -48,14 +54,20 @@ def load_and_standardize_price_data(symbols: list, csv_dir: str, start_date: str
     prices = prices.reindex(full_date_range).ffill().bfill()
     prices.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
-    prices.to_csv(os.path.join(csv_dir, f'{name}.csv'))
+    prices.to_csv(target_path)
     return prices
 
 def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str, end_date: str, name: str):
+    target_path = os.path.join(csv_dir, f"{name}.csv")
+    if os.path.exists(target_path):
+        print(f"[*] 发现已清洗的缓存文件 {target_path}，直接读取...")
+        bond = pd.read_csv(target_path, index_col='date', parse_dates=True)
+        return bond
+
     bond_data = {}
     print(f"[*] 正在从 {csv_dir} 读取并清洗底层数据...")
 
-        # 中英文对照字典（可根据需要扩充）
+    # 中英文对照字典（可根据需要扩充）
     header_mapping = {
         '日期': 'date',
         '中国国债收益率2年': 'two_years_china_bond_rate',
@@ -93,5 +105,5 @@ def load_and_standardize_bond_data(symbols: list, csv_dir: str, start_date: str,
     bond = bond.reindex(full_date_range).ffill().bfill()
     bond.index.name = 'date'
     print("[+] 数据清洗与对齐完成。")
-    bond.to_csv(os.path.join(csv_dir, f'{name}.csv'))
+    bond.to_csv(target_path)
     return bond
