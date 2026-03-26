@@ -190,14 +190,17 @@ if __name__ == "__main__":
     df_prices = apply_currency_conversion(df_prices, foreign_symbols=FOREIGN_SYMBOLS)
     df_compare = apply_currency_conversion(df_compare, foreign_symbols=FOREIGN_SYMBOLS)
 
+    # 提取动态无风险利率 (转化为小数)
+    dynamic_rf = df_bond['treasury_bonds_yield'] / 100.0
+
     print(f"\n[*] 开始搜索满足条件的权重组合 (MDD < 10%, Sharpe(80% > 0.5), Sortino > 1.0, Underwater < 365d)...")
     found = False
     for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
         portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=False)
         
         mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
-        rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=0.02)
-        sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=0.02)
+        rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=dynamic_rf)
+        sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=dynamic_rf)
         underwater_days = calculate_underwater_time(portfolio_res)
         
         if evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days):

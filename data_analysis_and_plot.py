@@ -5,7 +5,7 @@ from currency_converter import CurrencyConverter
 import os
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
-from typing import Tuple, Optional, Iterable
+from typing import Tuple, Optional, Iterable, Union
 
 
 # 全局图表样式设置
@@ -26,10 +26,10 @@ def calculate_max_drawdown(portfolio_series: pd.Series) -> Tuple[float, pd.Times
     return max_drawdown, mdd_date, drawdown_series
 
 
-def calculate_rolling_sharpe_ratio(portfolio_series: pd.Series, risk_free_rate: float = 0.02, trading_days: int = 252) -> pd.Series:
+def calculate_rolling_sharpe_ratio(portfolio_series: pd.Series, risk_free_rate: Union[float, pd.Series] = 0.02, trading_days: int = 252) -> pd.Series:
     """
-    计算滚动夏普比率（窗口为 trading_days）的均值。
-    risk_free_rate: 无风险利率基准（默认2%）
+    计算滚动夏普比率（窗口为 trading_days）序列。
+    risk_free_rate: 无风险利率基准（默认2%，也可传入动态收益率 Series）
     trading_days: 滚动时间窗口及一年交易天数（默认252天）
     """
     # 逆向推导组合的每日涨跌幅
@@ -47,16 +47,19 @@ def calculate_rolling_sharpe_ratio(portfolio_series: pd.Series, risk_free_rate: 
     rolling_vol = rolling_vol.replace(0, np.nan) # 防止绝对无波动时除以 0
     
     # 3. 得到滚动夏普比率序列，利用 Pandas 索引自动对齐相除
-    rolling_sharpe = (rolling_return - risk_free_rate) / rolling_vol
+    if isinstance(risk_free_rate, pd.Series):
+        rolling_sharpe = rolling_return.sub(risk_free_rate, axis=0).dropna() / rolling_vol
+    else:
+        rolling_sharpe = (rolling_return - risk_free_rate) / rolling_vol
 
-    # 返回滚动夏普序列的均值作为最终评价指标
-    return rolling_sharpe
+    # 返回滚动夏普序列作为最终评价指标
+    return rolling_sharpe.dropna()
 
 
-def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: float = 0.02, trading_days: int = 252) -> float:
+def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: Union[float, pd.Series] = 0.02, trading_days: int = 252) -> float:
     """
     计算年化索提诺比率。
-    risk_free_rate: 无风险利率基准（默认2%）
+    risk_free_rate: 无风险利率基准（默认2%，也可传入动态收益率 Series）
     trading_days: 一年交易天数（默认252天）
     """
     # 逆向推导组合的每日涨跌幅
@@ -66,11 +69,18 @@ def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: float =
     total_return = portfolio_series.iloc[-1] / portfolio_series.iloc[0]
     annualized_return = total_return ** (trading_days / len(portfolio_series)) - 1
     
+    # 获取用于全局扣减的无风险利率均值
+    if isinstance(risk_free_rate, pd.Series):
+        rf_mean = risk_free_rate.reindex(daily_returns.index).mean()
+    else:
+        rf_mean = risk_free_rate
+
     # 将年化无风险利率折算为每日基准
     daily_rf = (1 + risk_free_rate) ** (1 / trading_days) - 1
     
     # 计算下行落差 (如果当日收益大于 daily_rf，则记为0)
-    downside_diff = np.minimum(0, daily_returns - daily_rf)
+    excess_returns = daily_returns.sub(daily_rf, axis=0) if isinstance(daily_rf, pd.Series) else daily_returns - daily_rf
+    downside_diff = np.minimum(0, excess_returns.dropna())
     
     # 计算年化下行波动率
     downside_vol = np.sqrt(np.mean(downside_diff ** 2)) * np.sqrt(trading_days)
@@ -79,7 +89,7 @@ def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: float =
     if downside_vol == 0:
         return 0.0
         
-    sortino_ratio = (annualized_return - risk_free_rate) / downside_vol
+    sortino_ratio = (annualized_return - rf_mean) / downside_vol
     return sortino_ratio
 
 
