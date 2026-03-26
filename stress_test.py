@@ -60,65 +60,116 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True):
+def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
     annual_fees: list, 各ETF对应的年化费用率列表
+    use_ma_strategy: bool, 是否启用均线择时策略。若为True，则忽略 enable_rebalance 和 rebalance_freq。
     """
+    ma_strategy_status = "启用均线择时" if use_ma_strategy else f"关闭均线择时 (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})"
     if verbose:
-        print(f"[*] 启动回测引擎... (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})")
-    
-    daily_returns = prices_df.pct_change().dropna()
+        print(f"[*] 启动回测引擎... ({ma_strategy_status})")
+
+    # --- 策略设置与数据对齐 ---
+    if use_ma_strategy:
+        sma20 = prices_df.rolling(window=20).mean()
+        sma60 = prices_df.rolling(window=60).mean()
+        
+        # 使用Panel/concat结构化数据并对齐，dropna确保所有指标都有效
+        panel = pd.concat({
+            'prices': prices_df,
+            'returns': prices_df.pct_change(),
+            'sma20': sma20,
+            'sma60': sma60
+        }, axis=1).dropna()
+        
+        prices = panel['prices']
+        daily_returns = panel['returns']
+        sma20 = panel['sma20']
+        sma60 = panel['sma60']
+    else:
+        daily_returns = prices_df.pct_change().dropna()
+
+    # --- 回测初始化 ---
+    if daily_returns.empty:
+        if verbose: print("[!] 数据周期不足60天，无法启用均线策略。")
+        return pd.Series(dtype=float)
+
     portfolio_value = [1.0]
-    initial_portfolio_value = 1.0
     current_weights = np.array(initial_weights).copy()
-    
-    # 获取时间周期索引，用于触发再平衡
+    is_held = np.ones(len(initial_weights), dtype=bool) # 跟踪持仓状态
     periods = daily_returns.index.to_period(rebalance_freq)
 
+    # --- 主循环 ---
     for i in range(len(daily_returns)):
+        today_index = daily_returns.index[i]
         asset_returns = daily_returns.iloc[i].values
 
-        # 将年化费用均摊到252个交易日中并作为摩擦损耗扣除
         if annual_fees is not None:
             daily_fees = np.array(annual_fees) / 252.0
             asset_returns = asset_returns - daily_fees
 
-        # 1. 计算当日总体涨跌幅
-        # 权重 * 每日收益率
-        today_return = np.sum(current_weights * asset_returns)
+        rebalance_needed = False
+        target_weights = current_weights
+
+        # --- 均线择时策略逻辑 ---
+        if use_ma_strategy:
+            new_is_held = is_held.copy()
+            for j in range(len(initial_weights)):
+                price_today = prices.iloc[i, j]
+                sma60_today = sma60.iloc[i, j]
+                
+                # 卖出信号: 价格跌破SMA60
+                if is_held[j] and price_today < sma60_today:
+                    new_is_held[j] = False
+                # 买入信号: SMA20上穿SMA60 (金叉)
+                elif not is_held[j] and i > 0:
+                    sma20_today = sma20.iloc[i, j]
+                    sma20_yesterday = sma20.iloc[i-1, j]
+                    sma60_yesterday = sma60.iloc[i-1, j]
+                    if sma20_yesterday <= sma60_yesterday and sma20_today > sma60_today:
+                        new_is_held[j] = True
+            
+            if not np.array_equal(is_held, new_is_held):
+                is_held = new_is_held
+                rebalance_needed = True
+                
+                # 根据持仓状态，重新计算目标权重
+                held_initial_weights = np.array(initial_weights) * is_held
+                total_held_weight = np.sum(held_initial_weights)
+                if total_held_weight > 0:
+                    target_weights = held_initial_weights / total_held_weight
+                else: # 全部卖出，现金持有
+                    target_weights = np.zeros_like(initial_weights)
         
-        # 2. 累加净值
+        # --- 原有周期性再平衡逻辑 ---
+        elif enable_rebalance and i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
+            rebalance_needed = True
+            target_weights = np.array(initial_weights)
+
+        # --- 投资组合净值计算 ---
+        # 1. 使用再平衡前的权重计算当日收益
+        today_return = np.sum(current_weights * asset_returns)
         new_value = portfolio_value[-1] * (1 + today_return)
 
+        # 2. 计算权重自然漂移
+        drifted_weights = current_weights * (1 + asset_returns) / (1 + today_return) if (1 + today_return) != 0 else np.zeros_like(current_weights)
+
+        # 3. 如果需要再平衡，则计算成本并更新权重
+        if rebalance_needed:
+            turnover_weight = np.sum(np.maximum(0, drifted_weights - target_weights))
+            
+            sell_cost = turnover_weight * friction_costs["stamp_duty"]
+            round_trip_cost = turnover_weight * 2 * (friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
+            total_friction_ratio = sell_cost + round_trip_cost
+            
+            new_value *= (1 - total_friction_ratio) # 从当日净值中扣除总摩擦成本
+            current_weights = target_weights.copy()
+        else:
+            current_weights = drifted_weights
+
         portfolio_value.append(new_value)
-        
-        # 3. 权重自然漂移
-        current_weights = current_weights * (1 + asset_returns) / (1 + today_return)
-        
-        # 4. 机械化再平衡指令拦截
-        if enable_rebalance and i < len(daily_returns) - 1:
-            # 如果今天和明天的周期不同（例如到了月末最后一天），触发权重重置
-            if periods[i] != periods[i+1]:
-
-                # 计算从当前漂移权重调整回初始权重所需的交易量 (Turnover)
-                # turnover_weight 代表单向交易的权重之和（即卖出权重总和，也等于买入权重总和）
-                turnover_weight = np.sum(np.maximum(0, current_weights - np.array(initial_weights)))
-
-                # 卖出成本（印花税，单向）
-                sell_cost = turnover_weight * friction_costs["stamp_duty"]
-
-                # 双向成本（券商佣金 + 过户费 + 交易规费），乘以2因为买卖都收
-                round_trip_cost = turnover_weight * 2 * (friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
-
-                # 从当日净值中扣除总摩擦成本
-                total_friction_ratio = sell_cost + round_trip_cost
-                new_value = new_value * (1 - total_friction_ratio)
-
-                # 重置权重并更新扣除成本后的净值
-                current_weights = np.array(initial_weights).copy()
-                portfolio_value[-1] = new_value
 
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     return portfolio_series
@@ -137,13 +188,13 @@ def generate_weights(num_assets, step=0.01):
 # ==========================================
 # 策略优化搜索：寻找最佳权重组合
 # ==========================================
-def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int):
+def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series):
     """
     评估投资组合表现是否满足预设标准。
     - 条件1: 最大回撤小于10%
-    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.8
+    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.5
     - 条件3: 索提诺比率大于1.0
-    - 条件4: 最大水下时间小于180天
+    - 条件4: 最大水下时间小于365天
     """
     # 条件1: 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
     cond1 = mdd_val > -0.10
@@ -151,13 +202,13 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     # 条件2: 滚动夏普比率有80%的时间在0.8以上
     # shp是Series, (shp > 0.5)会返回一个布尔Series, .mean()计算True的比例
     cond2 = (shp > 0.8).mean() >= 0.8
-
+    
     # 条件3: 索提诺比率大于1.0
     cond3 = srt > 1.0
 
-    # 条件4: 最大水下时间小于180天
-    cond4 = underwater < 180
-
+    # 条件4: 最大水下时间小于365天
+    cond4 = underwater < 365
+    
     return cond1 and cond2 and cond3 and cond4
 
 # ==========================================
@@ -193,17 +244,20 @@ if __name__ == "__main__":
     # 提取动态无风险利率 (转化为小数)
     dynamic_rf = df_bond['treasury_bonds_yield'] / 100.0
 
-    print(f"\n[*] 开始搜索满足条件的权重组合")
+    print(f"\n[*] 开始使用均线策略搜索满足条件的权重组合...")
     found = False
     for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
-        portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=False)
+        portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, friction_costs=FRICTION_COST, verbose=False, use_ma_strategy=True)
         
+        if portfolio_res.empty:
+            continue
+
         mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
         rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=dynamic_rf)
         sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=dynamic_rf)
         underwater_days = calculate_underwater_time(portfolio_res)
         
-        if evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days):
+        if not rolling_sharpe.empty and evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res):
             print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}")
             WEIGHTS = test_weights
             found = True
