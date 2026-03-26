@@ -141,22 +141,22 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     """
     评估投资组合表现是否满足预设标准。
     - 条件1: 最大回撤小于10%
-    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.5
+    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.8
     - 条件3: 索提诺比率大于1.0
-    - 条件4: 最大水下时间小于365天
+    - 条件4: 最大水下时间小于180天
     """
     # 条件1: 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
     cond1 = mdd_val > -0.10
 
-    # 条件2: 滚动夏普比率有80%的时间在0.5以上
+    # 条件2: 滚动夏普比率有80%的时间在0.8以上
     # shp是Series, (shp > 0.5)会返回一个布尔Series, .mean()计算True的比例
-    cond2 = (shp > 0.5).mean() >= 0.8
+    cond2 = (shp > 0.8).mean() >= 0.8
 
     # 条件3: 索提诺比率大于1.0
     cond3 = srt > 1.0
 
-    # 条件4: 最大水下时间小于365天
-    cond4 = underwater < 365
+    # 条件4: 最大水下时间小于180天
+    cond4 = underwater < 180
 
     return cond1 and cond2 and cond3 and cond4
 
@@ -193,7 +193,7 @@ if __name__ == "__main__":
     # 提取动态无风险利率 (转化为小数)
     dynamic_rf = df_bond['treasury_bonds_yield'] / 100.0
 
-    print(f"\n[*] 开始搜索满足条件的权重组合 (MDD < 10%, Sharpe(80% > 0.5), Sortino > 1.0, Underwater < 365d)...")
+    print(f"\n[*] 开始搜索满足条件的权重组合")
     found = False
     for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
         portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, enable_rebalance=True, rebalance_freq='W', friction_costs=FRICTION_COST, verbose=False)
