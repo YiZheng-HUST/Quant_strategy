@@ -36,9 +36,13 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
     us_data = {}
 
     # Fetch A-Share ETFs
+    A_share_path = os.path.join(dir_path, "A-Share")
+    if not os.path.exists(A_share_path):
+        os.makedirs(A_share_path)
+        logging.info(f"Created directory: {A_share_path}")
     for name, item in a_etf_dict.items():
         symbol = item["symbol"]
-        file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
+        file_path = os.path.join(A_share_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             logging.info(f"Found local cache for A-share ETF {name}. Loading...")
             a_data[name] = pd.read_csv(file_path)
@@ -69,9 +73,13 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
                 logging.info(f"Saved A-share ETF {symbol} data to {file_path}")
     
     # Fetch US-Share ETFs
+    US_share_path = os.path.join(dir_path, "US-Share")
+    if not os.path.exists(US_share_path):
+        os.makedirs(US_share_path)
+        logging.info(f"Created directory: {US_share_path}")
     for name, item in us_etf_dict_eastmoney.items():
         symbol = item["symbol"]
-        file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
+        file_path = os.path.join(US_share_path, f"{name}_{end_date}.csv")
         if os.path.exists(file_path):
             logging.info(f"Found local cache for US ETF {name}. Loading...")
             us_data[name] = pd.read_csv(file_path)
@@ -97,8 +105,12 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
                 logging.info(f"Saved US-share ETF {symbol} data to {file_path}")
 
     # Fetch China and US treasury bonds yield
+    bond_path = os.path.join(dir_path, "bonds")
+    if not os.path.exists(bond_path):
+        os.makedirs(bond_path)
+        logging.info(f"Created directory: {bond_path}")
     name = "treasury_bonds_yield"
-    file_path = os.path.join(dir_path, f"{name}_{end_date}.csv")
+    file_path = os.path.join(bond_path, f"{name}_{end_date}.csv")
     if os.path.exists(file_path):
         logging.info(f"Found local cache for treasury_bonds_yield {name}. Loading...")
         us_data[name] = pd.read_csv(file_path)
