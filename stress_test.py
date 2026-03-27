@@ -246,7 +246,14 @@ if __name__ == "__main__":
     print(f"\n[*] 开始使用均线策略搜索满足条件的权重组合...")
     found = False
     for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
-        portfolio_res = run_backtest_engine(df_prices, test_weights, annual_fees=ANNUAL_FEES, friction_costs=FRICTION_COST, verbose=False, use_ma_strategy=True)
+        portfolio_res = run_backtest_engine(prices_df=df_prices, 
+                                            initial_weights=test_weights, 
+                                            annual_fees=ANNUAL_FEES, 
+                                            enable_rebalance=True,
+                                            rebalance_freq='W', 
+                                            friction_costs=FRICTION_COST, 
+                                            verbose=False, 
+                                            use_ma_strategy=False)
         
         if portfolio_res.empty:
             continue
