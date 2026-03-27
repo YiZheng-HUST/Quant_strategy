@@ -174,16 +174,51 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     return portfolio_series
 
-def generate_weights(num_assets, step=0.01):
-    steps = int(round(1.0 / step))
-    def _generate(remaining_steps, remaining_assets):
-        if remaining_assets == 1:
-            yield [round(remaining_steps * step, 2)]
+def generate_constrained_weights(bounds: list, step: float=0.05):
+    """
+    带边界约束的高效权重生成器 (深度优先搜索 + 动态剪枝)
+    :param bounds: 列表的列表或元组，例如 [(0.3, 0.8), (0.1, 0.4), (0.1, 0.3), (0.0, 0.15)]
+    :param step: 步长
+    """
+    num_assets = len(bounds)
+    total_steps = int(round(1.0 / step))
+    
+    # 步骤 1: 将浮点数的比例边界，全部转化为“步数 (steps)”的绝对整数边界，抹平浮点误差
+    step_bounds = []
+    for min_val, max_val in bounds:
+        min_steps = int(round(min_val / step))
+        max_steps = int(round(max_val / step))
+        step_bounds.append((min_steps, max_steps))
+
+    def _generate(asset_index, remaining_steps):
+        # 递归终点：处理到最后一个资产
+        if asset_index == num_assets - 1:
+            min_step, max_step = step_bounds[asset_index]
+            # 只有当剩下的步数刚好落在最后一个资产的允许范围内，才是一组有效解
+            if min_step <= remaining_steps <= max_step:
+                yield [round(remaining_steps * step, 4)]
             return
-        for i in range(remaining_steps + 1):
-            for tail in _generate(remaining_steps - i, remaining_assets - 1):
-                yield [round(i * step, 2)] + tail
-    yield from _generate(steps, num_assets)
+
+        # 递归分支：当前资产的允许上下限
+        min_step, max_step = step_bounds[asset_index]
+        
+        # 核心剪枝逻辑 (Branch and Bound)：
+        # 计算“后面所有资产”最少需要消耗多少步，最多能吸收多少步
+        min_absorbable = sum(b[0] for b in step_bounds[asset_index + 1:])
+        max_absorbable = sum(b[1] for b in step_bounds[asset_index + 1:])
+        
+        # 动态收窄当前资产的遍历范围：
+        # 1. 不能少于当前资产自身的下限，也不能让后面的资产“撑死”（超过 max_absorbable）
+        start_i = max(min_step, remaining_steps - max_absorbable)
+        # 2. 不能大于当前资产自身的上限，也不能让后面的资产“饿死”（不够 min_absorbable）
+        end_i = min(max_step, remaining_steps - min_absorbable)
+
+        # 只在这个被严格数学物理约束的范围内进行有效遍历
+        for i in range(start_i, end_i + 1):
+            for tail in _generate(asset_index + 1, remaining_steps - i):
+                yield [round(i * step, 4)] + tail
+
+    yield from _generate(0, total_steps)
 
 # ==========================================
 # 策略优化搜索：寻找最佳权重组合
@@ -217,8 +252,24 @@ if __name__ == "__main__":
     # 配置参数
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
 
-    # 选择投资组合与权重
-    TARGET_SYMBOLS = [A_SHARE_ETFS['short_term_bond_haifutong_etf'], A_SHARE_ETFS['red_low_volatility_50_nanfang_etf'], A_SHARE_ETFS['nasdaq_huaxia_etf'], A_SHARE_ETFS['gold_huaan_etf']]
+    # 选ETF组合
+    TARGET_SYMBOLS = [
+        A_SHARE_ETFS['short_term_bond_haifutong_etf'], 
+        A_SHARE_ETFS['red_low_volatility_50_nanfang_etf'], 
+        A_SHARE_ETFS['nasdaq_huaxia_etf'], 
+        A_SHARE_ETFS['gold_huaan_etf']]
+    
+    # 约束权重
+    TARGET_BOUNDS = [
+        (0.10, 0.50),
+        (0.00, 0.50),
+        (0.00, 0.50),
+        (0.05, 0.15)
+    ]
+
+    if len(TARGET_SYMBOLS) != len(TARGET_BOUNDS):
+        raise ValueError(f"TARGET_SYMBOLS length: {len(TARGET_SYMBOLS)} not equal to TARGET_BOUNDS length: {len(TARGET_BOUNDS)}")
+
     WEIGHTS = [0.50, 0.20, 0.20, 0.10]
 
     # 提取各 ETF 的年化费用 (A股为管理费+托管费，美股为总费用)
@@ -245,7 +296,7 @@ if __name__ == "__main__":
 
     print(f"\n[*] 开始使用均线策略搜索满足条件的权重组合...")
     found = False
-    for test_weights in generate_weights(len(TARGET_SYMBOLS), 0.05):
+    for test_weights in generate_constrained_weights(TARGET_BOUNDS, 0.05):
         portfolio_res = run_backtest_engine(prices_df=df_prices, 
                                             initial_weights=test_weights, 
                                             annual_fees=ANNUAL_FEES, 
