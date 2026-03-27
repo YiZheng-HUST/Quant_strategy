@@ -192,22 +192,21 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     """
     评估投资组合表现是否满足预设标准。
     - 条件1: 最大回撤小于10%
-    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.5
+    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.8
     - 条件3: 索提诺比率大于1.0
-    - 条件4: 最大水下时间小于365天
+    - 条件4: 最大水下时间小于180天
     """
-    # 条件1: 最大回撤为负数，因此 > -0.10 即代表跌幅小于 10%
+    # 条件1: 最大回撤
     cond1 = mdd_val > -0.10
 
-    # 条件2: 滚动夏普比率有80%的时间在0.8以上
-    # shp是Series, (shp > 0.5)会返回一个布尔Series, .mean()计算True的比例
+    # 条件2: 滚动夏普比率
     cond2 = (shp > 0.8).mean() >= 0.8
     
-    # 条件3: 索提诺比率大于1.0
+    # 条件3: 索提诺比率
     cond3 = srt > 1.0
 
-    # 条件4: 最大水下时间小于365天
-    cond4 = underwater < 365
+    # 条件4: 最大水下时间
+    cond4 = underwater < 180
     
     return cond1 and cond2 and cond3 and cond4
 
