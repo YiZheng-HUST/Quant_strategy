@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
-from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data
+from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data, load_and_standardize_fraction_sweep_data
 from data_analysis_and_plot import calculate_max_drawdown, calculate_rolling_sharpe_ratio, calculate_sortino_ratio, calculate_underwater_time, plot_portfolio_performance, plot_component_trends
 
 
@@ -60,13 +60,14 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True, initial_capital=1000000.0):
+def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True, initial_capital=1000000.0, df_fraction=None):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
     annual_fees: list, 各ETF对应的年化费用率列表
     use_ma_strategy: bool, 是否启用均线择时策略。若为True，则忽略 enable_rebalance 和 rebalance_freq。
     initial_capital: float, 初始资金（默认100万），用于计算真实交易份额和100份交易限制。
+    df_fraction: pd.DataFrame, 闲置资金理财产品（如货币基金/短融ETF）的净值走势，闲置资金每日将以此产生收益。
     """
     ma_strategy_status = "启用均线择时" if use_ma_strategy else f"关闭均线择时 (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})"
     if verbose:
@@ -74,8 +75,12 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
 
     # --- 策略设置与数据对齐 ---
     if use_ma_strategy:
-        sma20 = prices_df.rolling(window=20).mean()
-        sma60 = prices_df.rolling(window=60).mean()
+        if len(prices_df) < 60:
+            if verbose: print("[!] 数据周期不足60天，无法启用均线策略。")
+            return pd.Series(dtype=float)
+
+        sma20 = prices_df.rolling(window=20).mean() # 计算20日均线
+        sma60 = prices_df.rolling(window=60).mean() # 计算60日均线
         
         # 使用Panel/concat结构化数据并对齐，dropna确保所有指标都有效
         panel = pd.concat({
@@ -98,10 +103,13 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
         prices = prices_df.loc[daily_returns.index]
         initial_prices = prices_df.iloc[0].values
 
-    # --- 回测初始化 ---
-    if daily_returns.empty:
-        if verbose: print("[!] 数据周期不足60天，无法启用均线策略。")
-        return pd.Series(dtype=float)
+    # 提取理财产品收益率序列 (对齐至交易日历)
+    if df_fraction is not None and not df_fraction.empty:
+        # 假设 df_fraction 包含理财产品归一化或打折后的净值，取第一列计算日收益
+        fraction_returns = df_fraction.iloc[:, 1].pct_change().fillna(0)
+        fraction_returns = fraction_returns.reindex(daily_returns.index).fillna(0)
+    else:
+        fraction_returns = pd.Series(0.0, index=daily_returns.index)
 
     # 依据初始资金计算初始份额建仓 (强制按100份规则买入)
     target_cap = initial_capital * np.array(initial_weights)
@@ -119,6 +127,9 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
     # --- 主循环 ---
     for i in range(len(daily_returns)):
         today_prices = prices.iloc[i].values
+
+        # 每日闲置现金自动结算理财收益
+        cash *= (1 + fraction_returns.iloc[i])
 
         if annual_fees is not None:
             daily_fees = np.array(annual_fees) / 252.0
@@ -296,6 +307,11 @@ if __name__ == "__main__":
     # 配置参数
     WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
 
+    # 碎片资金管理
+    FRACTION_SWEEP = [
+        A_SHARE_ETFS['short_term_bond_haifutong_etf']
+    ]
+
     # 选ETF组合
     TARGET_SYMBOLS = [
         A_SHARE_ETFS['short_term_bond_haifutong_etf'], 
@@ -328,6 +344,7 @@ if __name__ == "__main__":
 
     # 数据抽取与清洗
     df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END, "clean_target_data")
+    df_fraction = load_and_standardize_fraction_sweep_data(FRACTION_SWEEP, WORK_DIR, START, END, "clean_fraction_sweep_data")
     df_bond = load_and_standardize_bond_data(BOND_SYMBOLS, WORK_DIR, START, END, 'clean_bond_data')
     df_compare = load_and_standardize_price_data(COMPARE_SYMBOLS, WORK_DIR, START, END, "clean_compare_data")
     
@@ -348,7 +365,9 @@ if __name__ == "__main__":
                                             rebalance_freq='W', 
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
-                                            use_ma_strategy=False)
+                                            use_ma_strategy=False,
+                                            initial_capital=1000000.0,
+                                            df_fraction=df_fraction)
         
         if portfolio_res.empty:
             continue
