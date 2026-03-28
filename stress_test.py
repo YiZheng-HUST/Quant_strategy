@@ -60,12 +60,13 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True):
+def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True, initial_capital=1000000.0):
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
     annual_fees: list, 各ETF对应的年化费用率列表
     use_ma_strategy: bool, 是否启用均线择时策略。若为True，则忽略 enable_rebalance 和 rebalance_freq。
+    initial_capital: float, 初始资金（默认100万），用于计算真实交易份额和100份交易限制。
     """
     ma_strategy_status = "启用均线择时" if use_ma_strategy else f"关闭均线择时 (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})"
     if verbose:
@@ -88,36 +89,50 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
         daily_returns = panel['returns']
         sma20 = panel['sma20']
         sma60 = panel['sma60']
+        
+        # 均线对齐后，第一天的真实价格位于原始 prices_df 的前一日
+        start_index_in_prices_df = prices_df.index.get_loc(prices.index[0]) - 1
+        initial_prices = prices_df.iloc[start_index_in_prices_df].values
     else:
         daily_returns = prices_df.pct_change().dropna()
+        prices = prices_df.loc[daily_returns.index]
+        initial_prices = prices_df.iloc[0].values
 
     # --- 回测初始化 ---
     if daily_returns.empty:
         if verbose: print("[!] 数据周期不足60天，无法启用均线策略。")
         return pd.Series(dtype=float)
 
-    portfolio_value = [1.0]
-    current_weights = np.array(initial_weights).copy()
+    # 依据初始资金计算初始份额建仓 (强制按100份规则买入)
+    target_cap = initial_capital * np.array(initial_weights)
+    buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
+    shares = np.floor(target_cap / (initial_prices * (1 + buy_friction_ratio)) / 100) * 100
+    
+    invested_cap = np.sum(shares * initial_prices)
+    buy_costs = np.sum(invested_cap * buy_friction_ratio)
+    cash = initial_capital - invested_cap - buy_costs
+    
+    portfolio_value = [initial_capital]
     is_held = np.ones(len(initial_weights), dtype=bool) # 跟踪持仓状态
     periods = daily_returns.index.to_period(rebalance_freq)
 
     # --- 主循环 ---
     for i in range(len(daily_returns)):
-        today_index = daily_returns.index[i]
-        asset_returns = daily_returns.iloc[i].values
+        today_prices = prices.iloc[i].values
 
         if annual_fees is not None:
             daily_fees = np.array(annual_fees) / 252.0
-            asset_returns = asset_returns - daily_fees
+            fee_deduction = np.sum(shares * today_prices * daily_fees)
+            cash -= fee_deduction
 
         rebalance_needed = False
-        target_weights = current_weights
+        target_weights = None
 
         # --- 均线择时策略逻辑 ---
         if use_ma_strategy:
             new_is_held = is_held.copy()
             for j in range(len(initial_weights)):
-                price_today = prices.iloc[i, j]
+                price_today = today_prices[j]
                 sma60_today = sma60.iloc[i, j]
                 
                 # 卖出信号: 价格跌破SMA60
@@ -148,30 +163,59 @@ def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_reb
             rebalance_needed = True
             target_weights = np.array(initial_weights)
 
-        # --- 投资组合净值计算 ---
-        # 1. 使用再平衡前的权重计算当日收益
-        today_return = np.sum(current_weights * asset_returns)
-        new_value = portfolio_value[-1] * (1 + today_return)
-
-        # 2. 计算权重自然漂移
-        drifted_weights = current_weights * (1 + asset_returns) / (1 + today_return) if (1 + today_return) != 0 else np.zeros_like(current_weights)
-
-        # 3. 如果需要再平衡，则计算成本并更新权重
+        # --- 触发真实交易执行 (附带100份最小交易单位限制) ---
         if rebalance_needed:
-            turnover_weight = np.sum(np.maximum(0, drifted_weights - target_weights))
+            current_total_value = np.sum(shares * today_prices) + cash
+            target_cap_allocation = current_total_value * target_weights
+            exact_target_shares = target_cap_allocation / today_prices
+            delta_shares_exact = exact_target_shares - shares
             
-            sell_cost = turnover_weight * friction_costs["stamp_duty"]
-            round_trip_cost = turnover_weight * 2 * (friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"])
-            total_friction_ratio = sell_cost + round_trip_cost
+            # 当偏离绝对值 >= 100 时才触发交易，且只交易 100 的整数倍
+            trade_shares = np.trunc(delta_shares_exact / 100) * 100
             
-            new_value *= (1 - total_friction_ratio) # 从当日净值中扣除总摩擦成本
-            current_weights = target_weights.copy()
-        else:
-            current_weights = drifted_weights
+            # 1. 优先处理卖出以释放资金
+            sell_mask = trade_shares < 0
+            if np.any(sell_mask):
+                sell_shares = np.abs(trade_shares[sell_mask])
+                sell_revenue = sell_shares * today_prices[sell_mask]
+                
+                sell_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"] + friction_costs["stamp_duty"]
+                sell_costs = sell_revenue * sell_friction_ratio
+                
+                cash += np.sum(sell_revenue - sell_costs)
+                shares[sell_mask] -= sell_shares
 
-        portfolio_value.append(new_value)
+            # 2. 再处理买入
+            buy_mask = trade_shares > 0
+            if np.any(buy_mask):
+                buy_shares = trade_shares[buy_mask]
+                buy_cost_basis = buy_shares * today_prices[buy_mask]
+                
+                buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
+                buy_costs = buy_cost_basis * buy_friction_ratio
+                total_buy_needed = buy_cost_basis + buy_costs
+                
+                total_needed_cash = np.sum(total_buy_needed)
+                # 防止资金不足 (由于偏离整数导致)：按比例缩减买入请求并继续遵守100份限制
+                if total_needed_cash > cash and total_needed_cash > 0:
+                    scale_factor = cash / total_needed_cash
+                    scaled_buy_shares = np.trunc((buy_shares * scale_factor) / 100) * 100
+                    
+                    buy_cost_basis = scaled_buy_shares * today_prices[buy_mask]
+                    buy_costs = buy_cost_basis * buy_friction_ratio
+                    total_buy_needed = buy_cost_basis + buy_costs
+                    trade_shares[buy_mask] = scaled_buy_shares
+                
+                cash -= np.sum(total_buy_needed)
+                shares[buy_mask] += trade_shares[buy_mask]
 
+        # 计算当日收盘总净值
+        current_value = np.sum(shares * today_prices) + cash
+        portfolio_value.append(current_value)
+
+    # 返回归一化的净值序列 (初始净值=1.0) 以兼容外部评估指标及出图逻辑
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
+    portfolio_series = portfolio_series / initial_capital
     return portfolio_series
 
 def generate_constrained_weights(bounds: list, step: float=0.05):
