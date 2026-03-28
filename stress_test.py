@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
+from typing import List, Dict, Optional
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data, load_and_standardize_fraction_sweep_data
 from data_analysis_and_plot import calculate_max_drawdown, calculate_rolling_sharpe_ratio, calculate_sortino_ratio, calculate_underwater_time, plot_portfolio_performance, plot_component_trends
@@ -29,7 +30,7 @@ FRICTION_COST = {   "commission": 0.00005, # 券商佣金，双向收取
 # ==========================================
 # 汇率穿透引擎
 # ==========================================
-def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, base_curr: str='USD', target_curr: str='CNY'):
+def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, base_curr: str='USD', target_curr: str='CNY') -> pd.DataFrame:
     """
     调用本地 ECB 数据，将指定的海外资产列转换为目标本币计价。
     """
@@ -60,7 +61,16 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
 # ==========================================
 # 核心策略引擎 (带自定义再平衡)
 # ==========================================
-def run_backtest_engine(prices_df, initial_weights, annual_fees=None, enable_rebalance=True, rebalance_freq='M', friction_costs=FRICTION_COST, verbose=True, use_ma_strategy=True, initial_capital=1000000.0, df_fraction=None):
+def run_backtest_engine(prices_df: pd.DataFrame, 
+                        initial_weights: List[float], 
+                        annual_fees: Optional[List[float]]=None, 
+                        enable_rebalance: bool=True, 
+                        rebalance_freq: str='M', 
+                        friction_costs: Dict[str, float]=FRICTION_COST, 
+                        verbose: bool=True, 
+                        use_ma_strategy: bool=True, 
+                        initial_capital: float=1000000.0, 
+                        df_fraction: Optional[pd.DataFrame]=None) -> pd.Series:
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
@@ -278,7 +288,7 @@ def generate_constrained_weights(bounds: list, step: float=0.05):
 # ==========================================
 # 策略优化搜索：寻找最佳权重组合
 # ==========================================
-def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series):
+def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series) -> bool:
     """
     评估投资组合表现是否满足预设标准。
     - 条件1: 最大回撤小于10%
