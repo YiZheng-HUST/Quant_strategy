@@ -377,8 +377,8 @@ if __name__ == "__main__":
 
     # 选ETF组合
     TARGET_SYMBOLS = [
+        A_SHARE_ETFS['five_year_treasury_bond_guotai_etf'],
         A_SHARE_ETFS['red_huatai_etf'], 
-        A_SHARE_ETFS['sp500_boshi_etf'], 
         A_SHARE_ETFS['nasdaq_guangfa_etf'], 
         A_SHARE_ETFS['gold_huaan_etf']]
     

@@ -97,7 +97,7 @@ def load_and_standardize_fraction_sweep_data(symbols: list, csv_dir: str, start_
         
         # 4. 对收益率进行处理，使其相比原始数据降低 25%
         daily_returns = original_price.pct_change().fillna(0)
-        adj_returns = daily_returns * 0.75
+        adj_returns = daily_returns * 0.9
         reconstructed_price = original_price.iloc[0] * (1 + adj_returns).cumprod()
         
         # 5. 将起点值归一化为 1.0
