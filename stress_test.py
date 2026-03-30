@@ -116,7 +116,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
     # 提取理财产品收益率序列 (对齐至交易日历)
     if df_fraction is not None and not df_fraction.empty:
         # 假设 df_fraction 包含理财产品归一化或打折后的净值，取第一列计算日收益
-        fraction_returns = df_fraction.iloc[:, 1].pct_change().fillna(0)
+        fraction_returns = df_fraction.iloc[:, 0].pct_change().fillna(0)
         fraction_returns = fraction_returns.reindex(daily_returns.index).fillna(0)
     else:
         fraction_returns = pd.Series(0.0, index=daily_returns.index)
