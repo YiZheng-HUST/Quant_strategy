@@ -100,14 +100,8 @@ def load_and_standardize_fraction_sweep_data(symbols: list, csv_dir: str, start_
         adj_returns = daily_returns * 0.75
         reconstructed_price = original_price.iloc[0] * (1 + adj_returns).cumprod()
         
-        # 5. 对传入的价格做除法，保证最高价绝对值严格小于 1
-        max_price = reconstructed_price.max()
-        divisor = 1.0
-        if max_price >= 1:
-            # 动态寻找能够将其压到 1 以下的最小 10 的次幂 (例如 max=150 -> divisor=1000)
-            divisor = 10 ** np.floor(np.log10(max_price) + 1)
-            
-        final_price = reconstructed_price / divisor
+        # 5. 将起点值归一化为 1.0
+        final_price = reconstructed_price / reconstructed_price.iloc[0]
         price_data[sym['symbol']] = final_price
 
     # 构建矩阵并强制执行时序对齐 (ffill & bfill 解决跨国节假日错位)
