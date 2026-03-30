@@ -12,11 +12,13 @@ A_SHARE_ETFS = {
     "sp500_boshi_etf": {"symbol": "513500", "management_fee": 0.006, "trustee_fee": 0.002},  # 标普500ETF博时，2013-12-05
     "hang_seng_huaxia_etf": {"symbol": "159920", "management_fee": 0.006, "trustee_fee": 0.0015},  # 恒生ETF华夏，2012-08-09
     "nasdaq_guangfa_etf": {"symbol": "159941", "management_fee": 0.008, "trustee_fee": 0.002},  # 纳斯达克ETF广发，2015-05-20
+    "five_year_treasury_bond_guotai_etf": {"symbol": "511010", "management_fee": 0.0015, "trustee_fee": 0.0005}, # 五年国债ETF国泰，2013-03-05
 
     # 5年以上ETF
     "nasdaq_huaxia_etf": {"symbol": "513300", "management_fee": 0.006, "trustee_fee": 0.002},  # 纳斯达克ETF华夏，2020-10-22
     "red_low_volatility_50_nanfang_etf": {"symbol": "515450", "management_fee": 0.005, "trustee_fee": 0.001},  # 红利低波50ETF南方，2020-01-17
     "short_term_bond_haifutong_etf": {"symbol": "511360", "management_fee": 0.0015, "trustee_fee": 0.0005},  # 短融ETF海富通，2020-08-03
+    "ten_year_treasury_bond_guotai_etf": {"symbol": "511260", "management_fee": 0.0015, "trustee_fee": 0.0005},  # 十年国债ETF国泰，2017-08-04
 }
 
 # Define lists for American ETFs in eastmoney
