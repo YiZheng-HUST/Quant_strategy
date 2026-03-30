@@ -69,7 +69,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                         friction_costs: Dict[str, float]=FRICTION_COST, 
                         verbose: bool=True, 
                         use_ma_strategy: bool=True, 
-                        initial_capital: float=1000000.0, 
+                        initial_capital: float=100000.0, 
                         df_fraction: Optional[pd.DataFrame]=None) -> pd.Series:
     """
     计算净值曲线。
@@ -113,6 +113,9 @@ def run_backtest_engine(prices_df: pd.DataFrame,
         prices = prices_df.loc[daily_returns.index]
         initial_prices = prices_df.iloc[0].values
 
+    if verbose:
+        print(f"[*] df_fraction: ({df_fraction})")
+
     # 提取理财产品收益率序列 (对齐至交易日历)
     if df_fraction is not None and not df_fraction.empty:
         # 假设 df_fraction 包含理财产品归一化或打折后的净值，取第一列计算日收益
@@ -123,16 +126,34 @@ def run_backtest_engine(prices_df: pd.DataFrame,
 
     # 依据初始资金计算初始份额建仓 (强制按100份规则买入)
     target_cap = initial_capital * np.array(initial_weights)
+    if verbose:
+        print(f"[*] target_cap: ({target_cap})")
     buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
+    if verbose:
+        print(f"[*] buy_friction_ratio: ({buy_friction_ratio})")
+
     shares = np.floor(target_cap / (initial_prices * (1 + buy_friction_ratio)) / 100) * 100
+    if verbose:
+        print(f"[*] shares: ({shares})")
     
     invested_cap = np.sum(shares * initial_prices)
+    if verbose:
+        print(f"[*] invested_cap: ({invested_cap})")
+
     buy_costs = np.sum(invested_cap * buy_friction_ratio)
+    if verbose:
+        print(f"[*] buy_costs: ({buy_costs})")
+
     cash = initial_capital - invested_cap - buy_costs
+    if verbose:
+        print(f"[*] cash: ({cash})")
     
     portfolio_value = [initial_capital]
     is_held = np.ones(len(initial_weights), dtype=bool) # 跟踪持仓状态
+
     periods = daily_returns.index.to_period(rebalance_freq)
+    if verbose:
+        print(f"[*] periods: ({periods})")
 
     # --- 主循环 ---
     for i in range(len(daily_returns)):
@@ -187,21 +208,35 @@ def run_backtest_engine(prices_df: pd.DataFrame,
         # --- 触发真实交易执行 (附带100份最小交易单位限制) ---
         if rebalance_needed:
             current_total_value = np.sum(shares * today_prices) + cash
+            if verbose:
+                print(f"[*] current_total_value in period {i}: ({current_total_value})")
             target_cap_allocation = current_total_value * target_weights
+            if verbose:
+                print(f"[*] target_cap_allocation in period {i}: ({target_cap_allocation})")
             exact_target_shares = target_cap_allocation / today_prices
+            if verbose:
+                print(f"[*] exact_target_shares in period {i}: ({exact_target_shares})")
             delta_shares_exact = exact_target_shares - shares
+            if verbose:
+                print(f"[*] delta_shares_exact in period {i}: ({delta_shares_exact})")
             
             # 当偏离绝对值 >= 100 时才触发交易，且只交易 100 的整数倍
             trade_shares = np.trunc(delta_shares_exact / 100) * 100
+            if verbose:
+                print(f"[*] trade_shares in period {i}: ({trade_shares})")
             
             # 1. 优先处理卖出以释放资金
             sell_mask = trade_shares < 0
             if np.any(sell_mask):
                 sell_shares = np.abs(trade_shares[sell_mask])
                 sell_revenue = sell_shares * today_prices[sell_mask]
+                if verbose:
+                    print(f"[*] sell_revenue in period {i}: ({sell_revenue})")
                 
                 sell_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"] + friction_costs["stamp_duty"]
                 sell_costs = sell_revenue * sell_friction_ratio
+                if verbose:
+                    print(f"[*] sell_costs in period {i}: ({sell_costs})")
                 
                 cash += np.sum(sell_revenue - sell_costs)
                 shares[sell_mask] -= sell_shares
@@ -211,15 +246,28 @@ def run_backtest_engine(prices_df: pd.DataFrame,
             if np.any(buy_mask):
                 buy_shares = trade_shares[buy_mask]
                 buy_cost_basis = buy_shares * today_prices[buy_mask]
+                if verbose:
+                    print(f"[*] buy_cost_basis in period {i}: ({buy_cost_basis})")
                 
                 buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
                 buy_costs = buy_cost_basis * buy_friction_ratio
+                if verbose:
+                    print(f"[*] buy_costs in period {i}: ({buy_costs})")
+
                 total_buy_needed = buy_cost_basis + buy_costs
                 
                 total_needed_cash = np.sum(total_buy_needed)
+                if verbose:
+                    print(f"[*] total_needed_cash in period {i}: ({total_needed_cash})")
+
                 # 防止资金不足 (由于偏离整数导致)：按比例缩减买入请求并继续遵守100份限制
                 if total_needed_cash > cash and total_needed_cash > 0:
+                    if verbose:
+                        print(f"[*] cach: {cash} < total_needed_cash: {total_needed_cash}")
                     scale_factor = cash / total_needed_cash
+                    if verbose:
+                        print(f"[*] scale_factor: {scale_factor}")
+
                     scaled_buy_shares = np.trunc((buy_shares * scale_factor) / 100) * 100
                     
                     buy_cost_basis = scaled_buy_shares * today_prices[buy_mask]
@@ -229,6 +277,10 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                 
                 cash -= np.sum(total_buy_needed)
                 shares[buy_mask] += trade_shares[buy_mask]
+            if verbose:
+                print(f"[*] shares in period {i}: ({shares})")
+                print(f"[*] cash in period {i}: ({cash})")
+                print("")
 
         # 计算当日收盘总净值
         current_value = np.sum(shares * today_prices) + cash
@@ -237,6 +289,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
     # 返回归一化的净值序列 (初始净值=1.0) 以兼容外部评估指标及出图逻辑
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     portfolio_series = portfolio_series / initial_capital
+
     return portfolio_series
 
 def generate_constrained_weights(bounds: list, step: float=0.05):
@@ -315,7 +368,7 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
 # ==========================================
 if __name__ == "__main__":
     # 配置参数
-    WORK_DIR = '/home/yizheng/workpath/finance/stress_test_data/20210324-20260323/'
+    WORK_DIR = '/workspace/finance/stress_test_data/20210324-20260323/'
 
     # 碎片资金管理
     FRACTION_SWEEP = [
@@ -365,8 +418,9 @@ if __name__ == "__main__":
     # 提取动态无风险利率 (转化为小数)
     dynamic_rf = df_bond['treasury_bonds_yield'] / 100.0
 
-    print(f"\n[*] 开始使用均线策略搜索满足条件的权重组合...")
+    print(f"\n[*] 开始使用搜索满足条件的权重组合...")
     found = False
+
     for test_weights in generate_constrained_weights(TARGET_BOUNDS, 0.05):
         portfolio_res = run_backtest_engine(prices_df=df_prices, 
                                             initial_weights=test_weights, 
@@ -376,7 +430,7 @@ if __name__ == "__main__":
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
                                             use_ma_strategy=False,
-                                            initial_capital=1000000.0,
+                                            initial_capital=100000.0,
                                             df_fraction=df_fraction)
         
         if portfolio_res.empty:
