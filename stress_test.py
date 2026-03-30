@@ -47,7 +47,7 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
         
     # 将汇率序列拼入 DataFrame 以利用 pandas 的 ffill 填补周末空缺
     prices_df['FX_RATE'] = fx_rates
-    prices_df['FX_RATE'].ffill(inplace=True)
+    prices_df['FX_RATE'] = prices_df['FX_RATE'].ffill()
     
     # 转换指定的海外资产
     for sym in foreign_symbols:
