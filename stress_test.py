@@ -344,22 +344,22 @@ def generate_constrained_weights(bounds: list, step: float=0.05):
 def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series) -> bool:
     """
     评估投资组合表现是否满足预设标准。
-    - 条件1: 最大回撤小于10%
-    - 条件2: 滚动夏普比率序列中，超过80%的值要大于0.8
-    - 条件3: 索提诺比率大于1.0
-    - 条件4: 最大水下时间小于180天
+    - 条件1: 最大回撤
+    - 条件2: 滚动夏普比率
+    - 条件3: 索提诺比率
+    - 条件4: 最大水下时间
     """
     # 条件1: 最大回撤
-    cond1 = mdd_val > -0.10
+    cond1 = mdd_val > -0.30
 
     # 条件2: 滚动夏普比率
-    cond2 = (shp > 0.8).mean() >= 0.8
+    cond2 = (shp > 0.6).mean() >= 0.5
     
     # 条件3: 索提诺比率
-    cond3 = srt > 1.0
+    cond3 = srt > 1
 
     # 条件4: 最大水下时间
-    cond4 = underwater < 180
+    cond4 = underwater < 730
     
     return cond1 and cond2 and cond3 and cond4
 
@@ -368,7 +368,7 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
 # ==========================================
 if __name__ == "__main__":
     # 配置参数
-    WORK_DIR = '/workspace/finance/stress_test_data/20210324-20260323/'
+    WORK_DIR = '/workspace/finance/stress_test_data/20160330-20260320/'
 
     # 碎片资金管理
     FRACTION_SWEEP = [
@@ -377,17 +377,17 @@ if __name__ == "__main__":
 
     # 选ETF组合
     TARGET_SYMBOLS = [
-        A_SHARE_ETFS['short_term_bond_haifutong_etf'], 
-        A_SHARE_ETFS['red_low_volatility_50_nanfang_etf'], 
-        A_SHARE_ETFS['nasdaq_huaxia_etf'], 
+        A_SHARE_ETFS['red_huatai_etf'], 
+        A_SHARE_ETFS['sp500_boshi_etf'], 
+        A_SHARE_ETFS['nasdaq_guangfa_etf'], 
         A_SHARE_ETFS['gold_huaan_etf']]
     
     # 约束权重
     TARGET_BOUNDS = [
-        (0.10, 0.50),
         (0.00, 0.50),
         (0.00, 0.50),
-        (0.05, 0.15)
+        (0.00, 0.50),
+        (0.00, 0.15)
     ]
 
     if len(TARGET_SYMBOLS) != len(TARGET_BOUNDS):
@@ -402,8 +402,8 @@ if __name__ == "__main__":
     COMPARE_SYMBOLS = [A_SHARE_ETFS['csi_300_huatai_etf'], US_SHARE_ETFS_SINA['sp500']]
 
     # 设置日期
-    START = '2021-03-24'
-    END = '2026-03-23'
+    START = '2016-03-30'
+    END = '2026-03-20'
 
     # 数据抽取与清洗
     df_prices = load_and_standardize_price_data(TARGET_SYMBOLS, WORK_DIR, START, END, "clean_target_data")
