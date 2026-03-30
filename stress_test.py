@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data, load_and_standardize_fraction_sweep_data
 from data_analysis_and_plot import calculate_max_drawdown, calculate_rolling_sharpe_ratio, calculate_sortino_ratio, calculate_underwater_time, plot_portfolio_performance, plot_component_trends
@@ -341,7 +341,7 @@ def generate_constrained_weights(bounds: list, step: float=0.05):
 # ==========================================
 # 策略优化搜索：寻找最佳权重组合
 # ==========================================
-def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series) -> bool:
+def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: int, portfolio_res: pd.Series) -> Tuple[bool, str]:
     """
     评估投资组合表现是否满足预设标准。
     - 条件1: 最大回撤
@@ -349,19 +349,22 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     - 条件3: 索提诺比率
     - 条件4: 最大水下时间
     """
-    # 条件1: 最大回撤
-    cond1 = mdd_val > -0.30
-
-    # 条件2: 滚动夏普比率
-    cond2 = (shp > 0.6).mean() >= 0.5
+    reasons = []
     
-    # 条件3: 索提诺比率
-    cond3 = srt > 1
+    if not (mdd_val > -0.30):
+        reasons.append(f"最大回撤({mdd_val:.2%}) <= -30%")
 
-    # 条件4: 最大水下时间
-    cond4 = underwater < 730
+    shp_ratio = (shp > 0.6).mean()
+    if not (shp_ratio >= 0.5):
+        reasons.append(f"夏普>0.6的占比({shp_ratio:.2%}) < 50%")
     
-    return cond1 and cond2 and cond3 and cond4
+    if not (srt > 1):
+        reasons.append(f"索提诺比率({srt:.2f}) <= 1.0")
+
+    if not (underwater < 730):
+        reasons.append(f"最大水下时间({underwater}天) >= 730天")
+        
+    return len(reasons) == 0, " | ".join(reasons)
 
 # ==========================================
 # 主程序执行入口 (Main Execution)
@@ -441,11 +444,15 @@ if __name__ == "__main__":
         sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=dynamic_rf)
         underwater_days = calculate_underwater_time(portfolio_res)
         
-        if not rolling_sharpe.empty and evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res):
-            print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}")
-            WEIGHTS = test_weights
-            found = True
-            break
+        if not rolling_sharpe.empty:
+            is_pass, reason = evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res)
+            if is_pass:
+                print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}")
+                WEIGHTS = test_weights
+                found = True
+                break
+            else:
+                print(f"[-] 权重组合 {test_weights} 被过滤，未通过原因: {reason}")
             
     if not found:
         print("[-] 遍历完毕，未找到满足条件的权重组合。")
