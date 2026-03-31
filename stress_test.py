@@ -349,9 +349,9 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     """
     MDD_VAL = -0.20
     SHARPE_RATIO = 0.6
-    SHARPE_RATIO_PERCENTAGE = 0.5
+    SHARPE_RATIO_PERCENTAGE = 0.55
     SORTINO_RATIO = 0.75
-    UNDERWATER_TIME = 730
+    UNDERWATER_TIME = 550
 
     reasons = []
     
@@ -451,7 +451,7 @@ if __name__ == "__main__":
         if not rolling_sharpe.empty:
             is_pass, reason = evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res)
             if is_pass:
-                print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}")
+                print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}, Underwater_days: {underwater_days}")
                 WEIGHTS = test_weights
                 found = True
                 break
