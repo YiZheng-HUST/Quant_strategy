@@ -1,8 +1,6 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 from currency_converter import CurrencyConverter
-import os
 from typing import List, Dict, Optional, Tuple
 from akshare_data_fetch import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 from load_and_standardize_data import load_and_standardize_price_data, load_and_standardize_bond_data, load_and_standardize_fraction_sweep_data
