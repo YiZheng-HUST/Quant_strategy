@@ -148,7 +148,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
 
     periods = daily_returns.index.to_period(rebalance_freq)
     if verbose:
-        print(f"[*] periods: ({periods})")
+        print(f"[*] periods length: ({len(periods)})")
 
     # --- 主循环 ---
     for i in range(len(daily_returns)):
@@ -185,7 +185,13 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                 
                 # 根据持仓状态，重新计算目标权重
                 held_initial_weights = np.array(initial_weights) * is_held
+                if verbose:
+                    print(f"[*] held_initial_weights in period {i}: ({held_initial_weights})")
+
                 total_held_weight = np.sum(held_initial_weights)
+                if verbose:
+                    print(f"[*] total_held_weight in period {i}: ({total_held_weight})")
+
                 if total_held_weight > 0:
                     target_weights = held_initial_weights / total_held_weight
                 else: # 全部卖出，现金持有
@@ -230,6 +236,8 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                     print(f"[*] sell_costs in period {i}: ({sell_costs})")
                 
                 cash += np.sum(sell_revenue - sell_costs)
+                if verbose:
+                    print(f"[*] cash after sold in period {i}: ({cash})")
                 shares[sell_mask] -= sell_shares
 
             # 2. 再处理买入
@@ -267,6 +275,8 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                     trade_shares[buy_mask] = scaled_buy_shares
                 
                 cash -= np.sum(total_buy_needed)
+                if verbose:
+                    print(f"[*] cash after buy in period {i}: ({cash})")
                 shares[buy_mask] += trade_shares[buy_mask]
             if verbose:
                 print(f"[*] shares in period {i}: ({shares})")
