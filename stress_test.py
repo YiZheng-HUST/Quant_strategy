@@ -142,9 +142,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
     cash = initial_capital - invested_cap - buy_costs
     if verbose:
         print(f"[*] cash: ({cash})")
-    
     portfolio_value = [initial_capital]
-    is_held = np.ones(len(initial_weights), dtype=bool) # 跟踪持仓状态
 
     periods = daily_returns.index.to_period(rebalance_freq)
     if verbose:
@@ -165,42 +163,26 @@ def run_backtest_engine(prices_df: pd.DataFrame,
         rebalance_needed = False
         target_weights = None
 
-        # --- 均线择时策略逻辑 ---
-        if use_ma_strategy:
-            new_is_held = is_held.copy()
-            for j in range(len(initial_weights)):
-                price_today = today_prices[j]
-                sma200_today = sma200.iloc[i, j]
-                
-                # 卖出信号: 价格跌破SMA200
-                if is_held[j] and price_today < sma200_today:
-                    new_is_held[j] = False
-                # 买入信号: 价格超过SMA200
-                elif not is_held[j] and price_today > sma200_today:
-                    new_is_held[j] = True
-            
-            if not np.array_equal(is_held, new_is_held):
-                is_held = new_is_held
-                rebalance_needed = True
-                
-                # 根据持仓状态，重新计算目标权重
-                held_initial_weights = np.array(initial_weights) * is_held
-                if verbose:
-                    print(f"[*] held_initial_weights in period {i}: ({held_initial_weights})")
-
-                total_held_weight = np.sum(held_initial_weights)
-                if verbose:
-                    print(f"[*] total_held_weight in period {i}: ({total_held_weight})")
-
-                if total_held_weight > 0:
-                    target_weights = held_initial_weights / total_held_weight
-                else: # 全部卖出，现金持有
-                    target_weights = np.zeros_like(initial_weights)
-        
-        # --- 原有周期性再平衡逻辑 ---
-        elif enable_rebalance and i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
+        # --- 周期性再平衡检查 ---
+        if enable_rebalance and i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
             rebalance_needed = True
+            
+            # 默认的目标权重是初始的战略配置
             target_weights = np.array(initial_weights)
+
+            # 如果启用均线策略，则在再平衡日进行判断，并用其作为过滤器
+            if use_ma_strategy:
+                is_bullish_filter = np.ones(len(initial_weights), dtype=bool)
+                for j in range(len(initial_weights)):
+                    price_today = today_prices[j]
+                    sma200_today = sma200.iloc[i, j]
+                    # 价格低于200日均线的资产，被视为空头市场，本次不持有
+                    if price_today < sma200_today:
+                        is_bullish_filter[j] = False
+                
+                # 将均线过滤器应用到目标权重上。
+                # 对于被过滤的资产，目标权重变为0，其资金将以现金形式持有（因为总权重不再归一化为1）。
+                target_weights = target_weights * is_bullish_filter
 
         # --- 触发真实交易执行 (附带100份最小交易单位限制) ---
         if rebalance_needed:
