@@ -426,7 +426,7 @@ if __name__ == "__main__":
     dynamic_rf = df_bond['treasury_bonds_yield'] / 100.0
 
     print(f"\n[*] 开始使用搜索满足条件的权重组合...")
-    found = False
+    valid_portfolios = []
 
     for test_weights in generate_constrained_weights(TARGET_BOUNDS, 0.05):
         portfolio_res = run_backtest_engine(prices_df=df_prices, 
@@ -451,16 +451,39 @@ if __name__ == "__main__":
         if not rolling_sharpe.empty:
             is_pass, reason = evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res)
             if is_pass:
-                print(f"[+] 找到满足条件的权重! 权重: {test_weights}, MDD: {mdd_value:.2%}, Rolling_Sharpe_mean: {rolling_sharpe.mean():.2f}, Sortino: {sortino:.2f}, Underwater_days: {underwater_days}")
-                WEIGHTS = test_weights
-                found = True
-                break
+                final_return = portfolio_res.iloc[-1]
+                print(f"[+] 记录满足条件的权重! 权重: {test_weights}, 最终净值: {final_return:.4f}, MDD: {mdd_value:.2%}, Sortino: {sortino:.2f}")
+                
+                # 将通过评估的组合指标全部打包记录，以便后续排名和调用
+                valid_portfolios.append({
+                    'weights': test_weights,
+                    'portfolio_res': portfolio_res,
+                    'mdd_value': mdd_value,
+                    'mdd_date': mdd_date,
+                    'rolling_sharpe': rolling_sharpe,
+                    'sortino': sortino,
+                    'final_return': final_return
+                })
             else:
                 print(f"[-] 权重组合 {test_weights} 被过滤，未通过原因: {reason}")
             
-    if not found:
+    if not valid_portfolios:
         print("[-] 遍历完毕，未找到满足条件的权重组合。")
         exit(0)
+        
+    # 按照最终净值 (final_return) 降序排序，选出最高的一组
+    valid_portfolios.sort(key=lambda x: x['final_return'], reverse=True)
+    best_portfolio = valid_portfolios[0]
+    
+    # 重新赋值给全局变量，供绘图使用
+    WEIGHTS = best_portfolio['weights']
+    portfolio_res = best_portfolio['portfolio_res']
+    mdd_value = best_portfolio['mdd_value']
+    mdd_date = best_portfolio['mdd_date']
+    rolling_sharpe = best_portfolio['rolling_sharpe']
+    sortino = best_portfolio['sortino']
+    
+    print(f"\n[+] 最佳权重组合选定! 权重: {WEIGHTS}, 最终净值: {best_portfolio['final_return']:.4f}, MDD: {mdd_value:.2%}, Sortino: {sortino:.2f}")
     
     # 生成收益曲线，传入对照组及评价指标
     mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, WEIGHTS, df_prices.columns, WORK_DIR)
