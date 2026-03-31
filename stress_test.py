@@ -83,25 +83,22 @@ def run_backtest_engine(prices_df: pd.DataFrame,
 
     # --- 策略设置与数据对齐 ---
     if use_ma_strategy:
-        if len(prices_df) < 60:
-            if verbose: print("[!] 数据周期不足60天，无法启用均线策略。")
+        if len(prices_df) < 200:
+            if verbose: print("[!] 数据周期不足200天，无法启用均线策略。")
             return pd.Series(dtype=float)
 
-        sma20 = prices_df.rolling(window=20).mean() # 计算20日均线
-        sma60 = prices_df.rolling(window=60).mean() # 计算60日均线
+        sma200 = prices_df.rolling(window=200).mean() # 计算200日均线
         
         # 使用Panel/concat结构化数据并对齐，dropna确保所有指标都有效
         panel = pd.concat({
             'prices': prices_df,
             'returns': prices_df.pct_change(),
-            'sma20': sma20,
-            'sma60': sma60
+            'sma200': sma200
         }, axis=1).dropna()
         
         prices = panel['prices']
         daily_returns = panel['returns']
-        sma20 = panel['sma20']
-        sma60 = panel['sma60']
+        sma200 = panel['sma200']
         
         # 均线对齐后，第一天的真实价格位于原始 prices_df 的前一日
         start_index_in_prices_df = prices_df.index.get_loc(prices.index[0]) - 1
@@ -173,18 +170,14 @@ def run_backtest_engine(prices_df: pd.DataFrame,
             new_is_held = is_held.copy()
             for j in range(len(initial_weights)):
                 price_today = today_prices[j]
-                sma60_today = sma60.iloc[i, j]
+                sma200_today = sma200.iloc[i, j]
                 
-                # 卖出信号: 价格跌破SMA60
-                if is_held[j] and price_today < sma60_today:
+                # 卖出信号: 价格跌破SMA200
+                if is_held[j] and price_today < sma200_today:
                     new_is_held[j] = False
-                # 买入信号: SMA20上穿SMA60 (金叉)
-                elif not is_held[j] and i > 0:
-                    sma20_today = sma20.iloc[i, j]
-                    sma20_yesterday = sma20.iloc[i-1, j]
-                    sma60_yesterday = sma60.iloc[i-1, j]
-                    if sma20_yesterday <= sma60_yesterday and sma20_today > sma60_today:
-                        new_is_held[j] = True
+                # 买入信号: 价格超过SMA200
+                elif not is_held[j] and price_today > sma200_today:
+                    new_is_held[j] = True
             
             if not np.array_equal(is_held, new_is_held):
                 is_held = new_is_held
@@ -436,7 +429,7 @@ if __name__ == "__main__":
                                             rebalance_freq='M', 
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
-                                            use_ma_strategy=False,
+                                            use_ma_strategy=True,
                                             initial_capital=100000.0,
                                             df_fraction=df_fraction)
         
