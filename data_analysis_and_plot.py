@@ -130,9 +130,6 @@ def calculate_underwater_time(portfolio_series: pd.Series) -> Tuple[int, Optiona
 # 可视化 - 总体资产体检图
 # ==========================================
 def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd.DataFrame], mdd_value: float, mdd_date: pd.Timestamp, sharpe: float, sortino: float, underwater_days: int, uw_start: Optional[pd.Timestamp], uw_end: Optional[pd.Timestamp], weights: Iterable[float], asset_names: Iterable[str], work_dir: str) -> pd.Timestamp:
-    import matplotlib.pyplot as plt
-    import os
-    
     fig, ax = plt.subplots(figsize=(19.2, 10.8))
     # 1. 绘制对照组（基准）资产并做归一化处理（计算为起始净值为1.0的曲线）
     if df_compare is not None and not df_compare.empty:

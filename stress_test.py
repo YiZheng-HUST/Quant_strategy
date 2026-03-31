@@ -433,7 +433,7 @@ if __name__ == "__main__":
                                             initial_weights=test_weights, 
                                             annual_fees=ANNUAL_FEES, 
                                             enable_rebalance=True,
-                                            rebalance_freq='W', 
+                                            rebalance_freq='M', 
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
                                             use_ma_strategy=False,
