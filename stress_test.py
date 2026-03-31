@@ -347,20 +347,26 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     - 条件3: 索提诺比率
     - 条件4: 最大水下时间
     """
+    MDD_VAL = -0.20
+    SHARPE_RATIO = 0.6
+    SHARPE_RATIO_PERCENTAGE = 0.5
+    SORTINO_RATIO = 0.75
+    UNDERWATER_TIME = 730
+
     reasons = []
     
-    if not (mdd_val > -0.30):
-        reasons.append(f"最大回撤({mdd_val:.2%}) <= -30%")
+    if not (mdd_val > MDD_VAL):
+        reasons.append(f"最大回撤({mdd_val:.2%}) <= {MDD_VAL}")
 
-    shp_ratio = (shp > 0.6).mean()
-    if not (shp_ratio >= 0.5):
-        reasons.append(f"夏普>0.6的占比({shp_ratio:.2%}) < 50%")
+    shp_ratio = (shp > SHARPE_RATIO).mean()
+    if not (shp_ratio >= SHARPE_RATIO_PERCENTAGE):
+        reasons.append(f"夏普 > {SHARPE_RATIO} 的占比({shp_ratio:.2%}) < {SHARPE_RATIO_PERCENTAGE}")
     
-    if not (srt > 1):
-        reasons.append(f"索提诺比率({srt:.2f}) <= 1.0")
+    if not (srt > SORTINO_RATIO):
+        reasons.append(f"索提诺比率({srt:.2f}) <= {SORTINO_RATIO}")
 
-    if not (underwater < 730):
-        reasons.append(f"最大水下时间({underwater}天) >= 730天")
+    if not (underwater < UNDERWATER_TIME):
+        reasons.append(f"最大水下时间({underwater}天) >= {UNDERWATER_TIME}天")
         
     return len(reasons) == 0, " | ".join(reasons)
 
