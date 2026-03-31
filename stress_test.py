@@ -351,7 +351,7 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     SHARPE_RATIO = 0.6
     SHARPE_RATIO_PERCENTAGE = 0.55
     SORTINO_RATIO = 0.75
-    UNDERWATER_TIME = 550
+    UNDERWATER_TIME = 600
 
     reasons = []
     
@@ -446,7 +446,7 @@ if __name__ == "__main__":
         mdd_value, mdd_date, drawdown_series = calculate_max_drawdown(portfolio_res)
         rolling_sharpe = calculate_rolling_sharpe_ratio(portfolio_res, risk_free_rate=dynamic_rf)
         sortino = calculate_sortino_ratio(portfolio_res, risk_free_rate=dynamic_rf)
-        underwater_days = calculate_underwater_time(portfolio_res)
+        underwater_days, uw_start, uw_end = calculate_underwater_time(portfolio_res)
         
         if not rolling_sharpe.empty:
             is_pass, reason = evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res)
@@ -462,6 +462,9 @@ if __name__ == "__main__":
                     'mdd_date': mdd_date,
                     'rolling_sharpe': rolling_sharpe,
                     'sortino': sortino,
+                    'underwater_days': underwater_days,
+                    'uw_start': uw_start,
+                    'uw_end': uw_end,
                     'final_return': final_return
                 })
             else:
@@ -482,11 +485,14 @@ if __name__ == "__main__":
     mdd_date = best_portfolio['mdd_date']
     rolling_sharpe = best_portfolio['rolling_sharpe']
     sortino = best_portfolio['sortino']
+    underwater_days = best_portfolio['underwater_days']
+    uw_start = best_portfolio['uw_start']
+    uw_end = best_portfolio['uw_end']
     
     print(f"\n[+] 最佳权重组合选定! 权重: {WEIGHTS}, 最终净值: {best_portfolio['final_return']:.4f}, MDD: {mdd_value:.2%}, Sortino: {sortino:.2f}")
     
     # 生成收益曲线，传入对照组及评价指标
-    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, WEIGHTS, df_prices.columns, WORK_DIR)
+    mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, underwater_days, uw_start, uw_end, WEIGHTS, df_prices.columns, WORK_DIR)
 
     # 成份股走势分析
     plot_component_trends(df_prices, mdd_trigger_date, WORK_DIR)

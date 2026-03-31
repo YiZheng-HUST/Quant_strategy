@@ -92,12 +92,13 @@ def calculate_sortino_ratio(portfolio_series: pd.Series, risk_free_rate: Union[f
     return sortino_ratio
 
 
-def calculate_underwater_time(portfolio_series: pd.Series) -> int:
+def calculate_underwater_time(portfolio_series: pd.Series) -> Tuple[int, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
     """
-    计算净值从创新高到再次创新高所需的时间（水下时间），返回统计周期中的最大值。
+    计算净值从创新高到再次创新高所需的时间（水下时间），返回统计周期中的最大值及对应的起止日期。
     """
     peak_dates = []  # 记录每个创新高的时间点
     underwater_durations = []  # 记录每次水下持续的时间
+    underwater_periods = []  # 记录每次水下持续的起止日期
 
     # 1. 找到所有创新高的时间点
     rolling_max = portfolio_series.cummax()
@@ -108,19 +109,27 @@ def calculate_underwater_time(portfolio_series: pd.Series) -> int:
     for i in range(len(peak_dates) - 1):
         time_delta = peak_dates[i+1] - peak_dates[i]
         underwater_durations.append(time_delta.days)  # 转换为天数
+        underwater_periods.append((peak_dates[i], peak_dates[i+1]))
+        
+    # 处理最后一段：如果当前还没有回到前高
+    if peak_dates and portfolio_series.index[-1] > peak_dates[-1]:
+        time_delta = portfolio_series.index[-1] - peak_dates[-1]
+        underwater_durations.append(time_delta.days)
+        underwater_periods.append((peak_dates[-1], portfolio_series.index[-1]))
 
-    # 3. 返回最大水下持续时间 (如果列表为空，则说明一直创新高，返回 0)
+    # 3. 返回最大水下持续时间及其起止日期
     if underwater_durations:
-        max_underwater_time = max(underwater_durations)
+        max_idx = int(np.argmax(underwater_durations))
+        max_underwater_time = underwater_durations[max_idx]
+        start_date, end_date = underwater_periods[max_idx]
+        return max_underwater_time, start_date, end_date
     else:
-        max_underwater_time = 0
-
-    return max_underwater_time
+        return 0, None, None
 
 # ==========================================
 # 可视化 - 总体资产体检图
 # ==========================================
-def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd.DataFrame], mdd_value: float, mdd_date: pd.Timestamp, sharpe: float, sortino: float, weights: Iterable[float], asset_names: Iterable[str], work_dir: str) -> pd.Timestamp:
+def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd.DataFrame], mdd_value: float, mdd_date: pd.Timestamp, sharpe: float, sortino: float, underwater_days: int, uw_start: Optional[pd.Timestamp], uw_end: Optional[pd.Timestamp], weights: Iterable[float], asset_names: Iterable[str], work_dir: str) -> pd.Timestamp:
     import matplotlib.pyplot as plt
     import os
     
@@ -146,6 +155,7 @@ def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd
                  f"MDD Date: {mdd_date}\n"
                  f"Sharpe Ratio: {sharpe:.2f}\n"
                  f"Sortino Ratio: {sortino:.2f}\n"
+                 f"Max Underwater: {underwater_days} days\n"
                  f"Weights:\n{weights_str}")
 
     
@@ -161,6 +171,10 @@ def plot_portfolio_performance(portfolio_res: pd.Series, df_compare: Optional[pd
         ax.annotate('Max Drawdown', xy=(mdd_date, mdd_y), xytext=(15, -30),
                      textcoords='offset points', 
                      arrowprops=dict(arrowstyle="->", connectionstyle="arc3,rad=.2", color='blue'))
+                     
+    # 5. 标注出最大水下时间段的阴影区
+    if uw_start is not None and uw_end is not None:
+        ax.axvspan(uw_start, uw_end, color='gray', alpha=0.3, zorder=1, label=f'Max Underwater ({underwater_days} days)')
 
     ax.set_title('Portfolio Performance vs Benchmarks')
     ax.set_xlabel('Date')
