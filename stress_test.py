@@ -66,47 +66,20 @@ def run_backtest_engine(prices_df: pd.DataFrame,
                         rebalance_freq: str='M', 
                         friction_costs: Dict[str, float]=FRICTION_COST, 
                         verbose: bool=True, 
-                        use_ma_strategy: bool=True, 
                         initial_capital: float=100000.0, 
                         df_fraction: Optional[pd.DataFrame]=None) -> pd.Series:
     """
     计算净值曲线。
     rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
     annual_fees: list, 各ETF对应的年化费用率列表
-    use_ma_strategy: bool, 是否启用均线择时策略。若为True，则忽略 enable_rebalance 和 rebalance_freq。
     initial_capital: float, 初始资金（默认100万），用于计算真实交易份额和100份交易限制。
     df_fraction: pd.DataFrame, 闲置资金理财产品（如货币基金/短融ETF）的净值走势，闲置资金每日将以此产生收益。
     """
-    ma_strategy_status = "启用均线择时" if use_ma_strategy else f"关闭均线择时 (再平衡机制: {'开启 (' + rebalance_freq + ')' if enable_rebalance else '关闭'})"
-    if verbose:
-        print(f"[*] 启动回测引擎... ({ma_strategy_status})")
 
     # --- 策略设置与数据对齐 ---
-    if use_ma_strategy:
-        if len(prices_df) < 200:
-            if verbose: print("[!] 数据周期不足200天，无法启用均线策略。")
-            return pd.Series(dtype=float)
-
-        sma200 = prices_df.rolling(window=200).mean() # 计算200日均线
-        
-        # 使用Panel/concat结构化数据并对齐，dropna确保所有指标都有效
-        panel = pd.concat({
-            'prices': prices_df,
-            'returns': prices_df.pct_change(),
-            'sma200': sma200
-        }, axis=1).dropna()
-        
-        prices = panel['prices']
-        daily_returns = panel['returns']
-        sma200 = panel['sma200']
-        
-        # 均线对齐后，第一天的真实价格位于原始 prices_df 的前一日
-        start_index_in_prices_df = prices_df.index.get_loc(prices.index[0]) - 1
-        initial_prices = prices_df.iloc[start_index_in_prices_df].values
-    else:
-        daily_returns = prices_df.pct_change().dropna()
-        prices = prices_df.loc[daily_returns.index]
-        initial_prices = prices_df.iloc[0].values
+    daily_returns = prices_df.pct_change().dropna()
+    prices = prices_df.loc[daily_returns.index]
+    initial_prices = prices_df.iloc[0].values
 
     if verbose:
         print(f"[*] df_fraction: ({df_fraction})")
@@ -166,23 +139,7 @@ def run_backtest_engine(prices_df: pd.DataFrame,
         # --- 周期性再平衡检查 ---
         if enable_rebalance and i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
             rebalance_needed = True
-            
-            # 默认的目标权重是初始的战略配置
             target_weights = np.array(initial_weights)
-
-            # 如果启用均线策略，则在再平衡日进行判断，并用其作为过滤器
-            if use_ma_strategy:
-                is_bullish_filter = np.ones(len(initial_weights), dtype=bool)
-                for j in range(len(initial_weights)):
-                    price_today = today_prices[j]
-                    sma200_today = sma200.iloc[i, j]
-                    # 价格低于200日均线的资产，被视为空头市场，本次不持有
-                    if price_today < sma200_today:
-                        is_bullish_filter[j] = False
-                
-                # 将均线过滤器应用到目标权重上。
-                # 对于被过滤的资产，目标权重变为0，其资金将以现金形式持有（因为总权重不再归一化为1）。
-                target_weights = target_weights * is_bullish_filter
 
         # --- 触发真实交易执行 (附带100份最小交易单位限制) ---
         if rebalance_needed:
@@ -421,7 +378,6 @@ if __name__ == "__main__":
                                             rebalance_freq='M', 
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
-                                            use_ma_strategy=False,
                                             initial_capital=100000.0,
                                             df_fraction=df_fraction)
         
