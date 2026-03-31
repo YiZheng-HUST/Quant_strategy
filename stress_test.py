@@ -421,7 +421,7 @@ if __name__ == "__main__":
                                             rebalance_freq='M', 
                                             friction_costs=FRICTION_COST, 
                                             verbose=False, 
-                                            use_ma_strategy=True,
+                                            use_ma_strategy=False,
                                             initial_capital=100000.0,
                                             df_fraction=df_fraction)
         
@@ -437,7 +437,6 @@ if __name__ == "__main__":
             is_pass, reason = evaluate_portfolio(mdd_value, rolling_sharpe, sortino, underwater_days, portfolio_res)
             if is_pass:
                 final_return = portfolio_res.iloc[-1]
-                print(f"[+] 记录满足条件的权重! 权重: {test_weights}, 最终净值: {final_return:.4f}, MDD: {mdd_value:.2%}, Sortino: {sortino:.2f}")
                 
                 # 将通过评估的组合指标全部打包记录，以便后续排名和调用
                 valid_portfolios.append({
@@ -458,6 +457,13 @@ if __name__ == "__main__":
     if not valid_portfolios:
         print("[-] 遍历完毕，未找到满足条件的权重组合。")
         exit(0)
+
+    # 统一打印所有符合条件的组合信息
+    print(f"\n[+] 共找到 {len(valid_portfolios)} 个满足条件的组合，详情如下:")
+    # 为了打印对齐，先对组合按最终收益排序
+    valid_portfolios.sort(key=lambda x: x['final_return'], reverse=True)
+    for p in valid_portfolios:
+        print(f"  - 权重: {p['weights']}, 最终净值: {p['final_return']:.4f}, MDD: {p['mdd_value']:.2%}, 夏普均值: {p['rolling_sharpe'].mean():.2f}, 索提诺: {p['sortino']:.2f}, 水下天数: {p['underwater_days']}天")
         
     # 按照最终净值 (final_return) 降序排序，选出最高的一组
     valid_portfolios.sort(key=lambda x: x['final_return'], reverse=True)
@@ -474,7 +480,7 @@ if __name__ == "__main__":
     uw_start = best_portfolio['uw_start']
     uw_end = best_portfolio['uw_end']
     
-    print(f"\n[+] 最佳权重组合选定! 权重: {WEIGHTS}, 最终净值: {best_portfolio['final_return']:.4f}, MDD: {mdd_value:.2%}, Sortino: {sortino:.2f}")
+    print(f"\n[+] 最终选定最佳组合! 权重: {WEIGHTS}, 最终净值: {best_portfolio['final_return']:.4f}, MDD: {mdd_value:.2%}, 夏普均值: {best_portfolio['rolling_sharpe'].mean():.2f}, 索提诺: {sortino:.2f}, 水下天数: {underwater_days}天")
     
     # 生成收益曲线，传入对照组及评价指标
     mdd_trigger_date = plot_portfolio_performance(portfolio_res, df_compare, mdd_value, mdd_date, rolling_sharpe.mean(), sortino, underwater_days, uw_start, uw_end, WEIGHTS, df_prices.columns, WORK_DIR)
