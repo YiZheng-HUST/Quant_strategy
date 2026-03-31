@@ -3,8 +3,6 @@ import random
 import time
 import akshare as ak
 import pandas as pd
-import matplotlib.pyplot as plt
-from currency_converter import CurrencyConverter
 from datetime import datetime, timedelta
 from ETF_list import A_SHARE_ETFS, US_SHARE_ETFS_EASTMONEY, US_SHARE_ETFS_SINA
 
@@ -43,10 +41,19 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
     for name, item in a_etf_dict.items():
         symbol = item["symbol"]
         file_path = os.path.join(A_share_path, f"{name}_{end_date}.csv")
-        if os.path.exists(file_path):
-            logging.info(f"Found local cache for A-share ETF {name}. Loading...")
-            a_data[name] = pd.read_csv(file_path)
-        else:
+        
+        valid_cache = False
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            try:
+                temp_df = pd.read_csv(file_path)
+                if not temp_df.empty:
+                    logging.info(f"Found local cache for A-share ETF {name}. Loading...")
+                    a_data[name] = temp_df
+                    valid_cache = True
+            except Exception as e:
+                logging.warning(f"Invalid cache for {name}: {e}")
+                
+        if not valid_cache:
             df = None
             try:
                 logging.info(f"Fetching data for A-share ETF {symbol} from eastmoney ({start_date} - {end_date})...")
@@ -80,10 +87,19 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
     for name, item in us_etf_dict_eastmoney.items():
         symbol = item["symbol"]
         file_path = os.path.join(US_share_path, f"{name}_{end_date}.csv")
-        if os.path.exists(file_path):
-            logging.info(f"Found local cache for US ETF {name}. Loading...")
-            us_data[name] = pd.read_csv(file_path)
-        else:
+        
+        valid_cache = False
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            try:
+                temp_df = pd.read_csv(file_path)
+                if not temp_df.empty:
+                    logging.info(f"Found local cache for US ETF {name}. Loading...")
+                    us_data[name] = temp_df
+                    valid_cache = True
+            except Exception as e:
+                logging.warning(f"Invalid cache for {name}: {e}")
+                
+        if not valid_cache:
             df = None
             try:
                 logging.info(f"Fetching data for US ETF {symbol} from eastmoney ({start_date} - {end_date})...")
@@ -111,10 +127,19 @@ def fetch_price_data(a_etf_dict, us_etf_dict_eastmoney, us_etf_dict_sina, start_
         logging.info(f"Created directory: {bond_path}")
     name = "treasury_bonds_yield"
     file_path = os.path.join(bond_path, f"{name}_{end_date}.csv")
-    if os.path.exists(file_path):
-        logging.info(f"Found local cache for treasury_bonds_yield {name}. Loading...")
-        us_data[name] = pd.read_csv(file_path)
-    else:
+    
+    valid_cache = False
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+        try:
+            temp_df = pd.read_csv(file_path)
+            if not temp_df.empty:
+                logging.info(f"Found local cache for treasury_bonds_yield {name}. Loading...")
+                us_data[name] = temp_df
+                valid_cache = True
+        except Exception as e:
+            logging.warning(f"Invalid cache for {name}: {e}")
+            
+    if not valid_cache:
         df = None
         try:
             logging.info(f"Fetching data for treasury_bonds_yield {symbol} from eastmoney ({start_date} - {end_date})...")
