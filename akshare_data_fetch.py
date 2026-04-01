@@ -12,7 +12,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 today = datetime.now()
-one_year_ago = today - timedelta(days=3650)
+one_year_ago = today - timedelta(days=7300)
 
 START_DATE = one_year_ago.strftime("%Y%m%d")
 END_DATE = today.strftime("%Y%m%d")
