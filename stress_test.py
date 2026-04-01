@@ -24,7 +24,6 @@ FRICTION_COST = {   "commission": 0.00005, # 券商佣金，双向收取
                     "transfer_fee": 0.00001,   # 过户费，双向收取
                     "regulatory_fee": 0.0000687}  # 交易规费，双向收取
 
-
 # ==========================================
 # 汇率穿透引擎
 # ==========================================
@@ -57,7 +56,7 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
     return prices_df
 
 # ==========================================
-# 核心策略引擎 (带自定义再平衡)
+# 再平衡策略引擎
 # ==========================================
 def run_backtest_engine(prices_df: pd.DataFrame, 
                         initial_weights: List[float], 
@@ -232,7 +231,6 @@ def run_backtest_engine(prices_df: pd.DataFrame,
 
     return portfolio_series
 
-
 # ==========================================
 # 动态调仓策略引擎
 # ==========================================
@@ -403,6 +401,9 @@ def run_dynamic_adjustment_backtest(
     portfolio_series = portfolio_series / initial_capital
     return portfolio_series
 
+# ==========================================
+# 产生受约束的权重
+# ==========================================
 def generate_constrained_weights(bounds: list, step: float=0.05):
     """
     带边界约束的高效权重生成器 (深度优先搜索 + 动态剪枝)
