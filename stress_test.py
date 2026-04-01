@@ -261,7 +261,7 @@ def run_dynamic_adjustment_backtest(
     if verbose:
         print(f"[*] 启动动态调仓回测引擎...")
 
-    # --- 1. 基本设置与数据对齐 ---
+    # --- 基本设置与数据对齐 ---
     if len(prices_df) < 200:
         if verbose: print("[!] 数据周期不足200天，无法启用动态均线策略。")
         return pd.Series(dtype=float)
@@ -288,7 +288,7 @@ def run_dynamic_adjustment_backtest(
     else:
         fraction_returns = pd.Series(0.0, index=daily_returns.index)
 
-    # --- 2. 回测初始化 ---
+    # --- 回测初始化 ---
     target_cap = initial_capital * np.array(initial_weights)
     buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
     shares = np.floor(target_cap / (initial_prices * (1 + buy_friction_ratio)) / 100) * 100
@@ -307,8 +307,8 @@ def run_dynamic_adjustment_backtest(
         print(f"[!] 错误：指定的动态调整资产 '{e.args[0]}' 不在投资组合中。")
         return pd.Series(dtype=float)
 
-    # --- 3. 主循环 ---
-    last_target_weights = np.array(initial_weights).copy()
+    # --- 主循环 ---
+    current_target_weights = np.array(initial_weights).copy()
 
     for i in range(len(daily_returns)):
         today_prices = prices.iloc[i].values
@@ -320,83 +320,132 @@ def run_dynamic_adjustment_backtest(
             cash -= fee_deduction
 
         rebalance_needed = False
-        target_weights = None
 
-        # ===============================================================
-        # 1. 动态调整策略实现 (每日检查，独立于周期再平衡)
-        current_target_weights = np.array(initial_weights).copy()
-
+        # --- 均线择时策略（快时钟） ---
         price1_today = today_prices[asset1_idx]
         sma200_1_today = sma200.iloc[i, asset1_idx]
         
         price2_today = today_prices[asset2_idx]
         sma200_2_today = sma200.iloc[i, asset2_idx]
 
-        # 条件1 & 2: 当 asset1 跌破 200 日均线时
-        if price1_today < sma200_1_today:
+        # 条件1 & 2: 当 asset1 跌破 200 日均线时，且权重没有被调整过
+        if price1_today < sma200_1_today and np.array_equal(current_target_weights, np.array(initial_weights).copy()):
             reduce_amount = current_target_weights[asset1_idx] * 0.5
-            current_target_weights[asset1_idx] -= reduce_amount
             
             # 条件1: asset2 没有跌破 200 日均线，将抽离的权重加给 asset2
             if price2_today >= sma200_2_today:
+                current_target_weights[asset1_idx] -= reduce_amount
                 current_target_weights[asset2_idx] += reduce_amount
+                rebalance_needed = True
+                if verbose:
+                    print(f"{asset1_to_adjust} 跌破 200 日均线, {asset2_to_adjust} 高于 200 日均线，{asset1_to_adjust} 权重减半增加至{asset2_to_adjust}")
+            # 条件1: asset2 跌破 200 日均线，将抽离的权重保存为现金
+            else:
+                current_target_weights[asset1_idx] -= reduce_amount
+                rebalance_needed = True
+                if verbose:
+                    print(f"{asset2_to_adjust} 也跌破 200 日均线，{asset1_to_adjust} 权重减半并持有现金")
+            if verbose:
+                print(f"调整后目标权重: {current_target_weights}")
+        # 当 asset1 涨破200日均线时
+        # 检查 asset1 是否之前被降权过（即当前权重不等于初始权重），并且现在价格已恢复
+        elif price1_today >= sma200_1_today and not np.array_equal(current_target_weights, np.array(initial_weights).copy()):
+                current_target_weights = np.array(initial_weights).copy()
+                rebalance_needed = True
+                if verbose:
+                    print(f"{asset1_to_adjust} 涨破 200 日均线，权重恢复")
+                    print(f"调整后目标权重: {current_target_weights}")
 
-        # 检查目标权重是否因为均线信号发生变化（发生金叉/死叉）
-        if not np.array_equal(current_target_weights, last_target_weights):
-            rebalance_needed = True
-        # ===============================================================
-
-        # --- 2. 周期性再平衡检查 ---
+        # --- 周期性再平衡检查（慢时钟） ---
         if i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
             rebalance_needed = True
 
-        # --- 4. 交易执行 ---
+        # --- 交易执行 ---
         if rebalance_needed:
-            target_weights = current_target_weights
-            last_target_weights = current_target_weights.copy()
-            
             current_total_value = np.sum(shares * today_prices) + cash
-            target_cap_allocation = current_total_value * target_weights
+            if verbose:
+                print(f"[*] current_total_value in period {i}: ({current_total_value})")
+            target_cap_allocation = current_total_value * current_target_weights
+            if verbose:
+                print(f"[*] target_cap_allocation in period {i}: ({target_cap_allocation})")
             exact_target_shares = target_cap_allocation / today_prices
+            if verbose:
+                print(f"[*] exact_target_shares in period {i}: ({exact_target_shares})")
             delta_shares_exact = exact_target_shares - shares
-            trade_shares = np.trunc(delta_shares_exact / 100) * 100
+            if verbose:
+                print(f"[*] delta_shares_exact in period {i}: ({delta_shares_exact})")
             
-            # 卖出
+            # 当偏离绝对值 >= 100 时才触发交易，且只交易 100 的整数倍
+            trade_shares = np.trunc(delta_shares_exact / 100) * 100
+            if verbose:
+                print(f"[*] trade_shares in period {i}: ({trade_shares})")
+            
+            # 1. 优先处理卖出以释放资金
             sell_mask = trade_shares < 0
             if np.any(sell_mask):
                 sell_shares = np.abs(trade_shares[sell_mask])
                 sell_revenue = sell_shares * today_prices[sell_mask]
+                if verbose:
+                    print(f"[*] sell_revenue in period {i}: ({sell_revenue})")
+                
                 sell_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"] + friction_costs["stamp_duty"]
                 sell_costs = sell_revenue * sell_friction_ratio
+                if verbose:
+                    print(f"[*] sell_costs in period {i}: ({sell_costs})")
+                
                 cash += np.sum(sell_revenue - sell_costs)
+                if verbose:
+                    print(f"[*] cash after sold in period {i}: ({cash})")
                 shares[sell_mask] -= sell_shares
 
-            # 买入
+            # 2. 再处理买入
             buy_mask = trade_shares > 0
             if np.any(buy_mask):
                 buy_shares = trade_shares[buy_mask]
                 buy_cost_basis = buy_shares * today_prices[buy_mask]
+                if verbose:
+                    print(f"[*] buy_cost_basis in period {i}: ({buy_cost_basis})")
+                
                 buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
                 buy_costs = buy_cost_basis * buy_friction_ratio
+                if verbose:
+                    print(f"[*] buy_costs in period {i}: ({buy_costs})")
+
                 total_buy_needed = buy_cost_basis + buy_costs
-                total_needed_cash = np.sum(total_buy_needed)
                 
+                total_needed_cash = np.sum(total_buy_needed)
+                if verbose:
+                    print(f"[*] total_needed_cash in period {i}: ({total_needed_cash})")
+
+                # 防止资金不足 (由于偏离整数导致)：按比例缩减买入请求并继续遵守100份限制
                 if total_needed_cash > cash and total_needed_cash > 0:
+                    if verbose:
+                        print(f"[*] cach: {cash} < total_needed_cash: {total_needed_cash}")
                     scale_factor = cash / total_needed_cash
+                    if verbose:
+                        print(f"[*] scale_factor: {scale_factor}")
+
                     scaled_buy_shares = np.trunc((buy_shares * scale_factor) / 100) * 100
+                    
                     buy_cost_basis = scaled_buy_shares * today_prices[buy_mask]
                     buy_costs = buy_cost_basis * buy_friction_ratio
                     total_buy_needed = buy_cost_basis + buy_costs
                     trade_shares[buy_mask] = scaled_buy_shares
                 
                 cash -= np.sum(total_buy_needed)
+                if verbose:
+                    print(f"[*] cash after buy in period {i}: ({cash})")
                 shares[buy_mask] += trade_shares[buy_mask]
+            if verbose:
+                print(f"[*] shares in period {i}: ({shares})")
+                print(f"[*] cash in period {i}: ({cash})")
+                print("")
 
-        # --- 5. 净值计算 ---
+        # --- 净值计算 ---
         current_value = np.sum(shares * today_prices) + cash
         portfolio_value.append(current_value)
 
-    # --- 6. 返回结果 ---
+    # --- 返回结果 ---
     portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
     portfolio_series = portfolio_series / initial_capital
     return portfolio_series
