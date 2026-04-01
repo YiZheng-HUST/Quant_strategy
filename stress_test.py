@@ -56,41 +56,66 @@ def apply_currency_conversion(prices_df: pd.DataFrame, foreign_symbols: list, ba
     return prices_df
 
 # ==========================================
-# 再平衡策略引擎
+# 动态调仓策略引擎
 # ==========================================
-def run_backtest_engine(prices_df: pd.DataFrame, 
-                        initial_weights: List[float], 
-                        annual_fees: Optional[List[float]]=None, 
-                        enable_rebalance: bool=True, 
-                        rebalance_freq: str='M', 
-                        friction_costs: Dict[str, float]=FRICTION_COST, 
-                        verbose: bool=True, 
-                        initial_capital: float=100000.0, 
-                        df_fraction: Optional[pd.DataFrame]=None) -> pd.Series:
+def run_dynamic_adjustment_backtest(
+    prices_df: pd.DataFrame,
+    initial_weights: List[float],
+    asset1_to_adjust: str,
+    asset2_to_adjust: str,
+    enable_dynamic_adjustment: bool = True,
+    annual_fees: Optional[List[float]] = None,
+    rebalance_freq: str = 'M',
+    friction_costs: Dict[str, float] = FRICTION_COST,
+    verbose: bool = True,
+    initial_capital: float = 100000.0,
+    df_fraction: Optional[pd.DataFrame] = None
+) -> pd.Series:
     """
-    计算净值曲线。
-    rebalance_freq: 'M'(月度), 'Q'(季度), 'Y'(年度), 'W'(每周)
-    annual_fees: list, 各ETF对应的年化费用率列表
-    initial_capital: float, 初始资金（默认100万），用于计算真实交易份额和100份交易限制。
-    df_fraction: pd.DataFrame, 闲置资金理财产品（如货币基金/短融ETF）的净值走势，闲置资金每日将以此产生收益。
+    在基础权重上，对特定资产进行动态权重调整的回测。
+    asset1_to_adjust: str, 第一个需要动态调整权重的资产名称
+    asset2_to_adjust: str, 第二个需要动态调整权重的资产名称
+    enable_dynamic_adjustment: bool, 是否启用动态调整策略
     """
-
-    # --- 策略设置与数据对齐 ---
-    daily_returns = prices_df.pct_change().dropna()
-    prices = prices_df.loc[daily_returns.index]
-    initial_prices = prices_df.iloc[0].values
-
     if verbose:
-        print(f"[*] df_fraction: ({df_fraction})")
+        print(f"[*] 启动动态调仓回测引擎...")
 
-    # 提取理财产品收益率序列 (对齐至交易日历)
+    # --- 1. 基本设置与数据对齐 ---
+    if enable_dynamic_adjustment:
+        if len(prices_df) < 200:
+            if verbose: print("[!] 数据周期不足200天，无法启用动态均线策略。")
+            return pd.Series(dtype=float)
+
+        sma200 = prices_df.rolling(window=200).mean() # 计算200日均线
+        # 不再使用 .dropna() 来删除均线无效的行，而是保留它们
+        panel = pd.concat({
+            'prices': prices_df,
+            'returns': prices_df.pct_change(),
+            'sma200': sma200
+        }, axis=1)
+        
+        # 仅删除第一行由 pct_change() 产生的 NaN
+        panel = panel.iloc[1:]
+
+        prices = panel['prices']
+        daily_returns = panel['returns']
+        sma200 = panel['sma200']
+        
+        # 初始建仓价格为回测开始前的第一天价格
+        initial_prices = prices_df.iloc[0].values
+    else:
+        daily_returns = prices_df.pct_change().dropna()
+        prices = prices_df.loc[daily_returns.index]
+        initial_prices = prices_df.iloc[0].values
+
+    # 提取理财产品收益率序列
     if df_fraction is not None and not df_fraction.empty:
-        # 假设 df_fraction 包含理财产品归一化或打折后的净值，取第一列计算日收益
         fraction_returns = df_fraction.iloc[:, 0].pct_change().fillna(0)
         fraction_returns = fraction_returns.reindex(daily_returns.index).fillna(0)
     else:
         fraction_returns = pd.Series(0.0, index=daily_returns.index)
 
+    # --- 回测初始化 ---
     # 依据初始资金计算初始份额建仓 (强制按100份规则买入)
     target_cap = initial_capital * np.array(initial_weights)
     if verbose:
@@ -120,184 +145,6 @@ def run_backtest_engine(prices_df: pd.DataFrame,
     if verbose:
         print(f"[*] periods length: ({len(periods)})")
 
-    # --- 主循环 ---
-    for i in range(len(daily_returns)):
-        today_prices = prices.iloc[i].values
-
-        # 每日闲置现金自动结算理财收益
-        cash *= (1 + fraction_returns.iloc[i])
-
-        if annual_fees is not None:
-            daily_fees = np.array(annual_fees) / 252.0
-            fee_deduction = np.sum(shares * today_prices * daily_fees)
-            cash -= fee_deduction
-
-        rebalance_needed = False
-        target_weights = None
-
-        # --- 周期性再平衡检查 ---
-        if enable_rebalance and i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
-            rebalance_needed = True
-            target_weights = np.array(initial_weights)
-
-        # --- 触发真实交易执行 (附带100份最小交易单位限制) ---
-        if rebalance_needed:
-            current_total_value = np.sum(shares * today_prices) + cash
-            if verbose:
-                print(f"[*] current_total_value in period {i}: ({current_total_value})")
-            target_cap_allocation = current_total_value * target_weights
-            if verbose:
-                print(f"[*] target_cap_allocation in period {i}: ({target_cap_allocation})")
-            exact_target_shares = target_cap_allocation / today_prices
-            if verbose:
-                print(f"[*] exact_target_shares in period {i}: ({exact_target_shares})")
-            delta_shares_exact = exact_target_shares - shares
-            if verbose:
-                print(f"[*] delta_shares_exact in period {i}: ({delta_shares_exact})")
-            
-            # 当偏离绝对值 >= 100 时才触发交易，且只交易 100 的整数倍
-            trade_shares = np.trunc(delta_shares_exact / 100) * 100
-            if verbose:
-                print(f"[*] trade_shares in period {i}: ({trade_shares})")
-            
-            # 1. 优先处理卖出以释放资金
-            sell_mask = trade_shares < 0
-            if np.any(sell_mask):
-                sell_shares = np.abs(trade_shares[sell_mask])
-                sell_revenue = sell_shares * today_prices[sell_mask]
-                if verbose:
-                    print(f"[*] sell_revenue in period {i}: ({sell_revenue})")
-                
-                sell_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"] + friction_costs["stamp_duty"]
-                sell_costs = sell_revenue * sell_friction_ratio
-                if verbose:
-                    print(f"[*] sell_costs in period {i}: ({sell_costs})")
-                
-                cash += np.sum(sell_revenue - sell_costs)
-                if verbose:
-                    print(f"[*] cash after sold in period {i}: ({cash})")
-                shares[sell_mask] -= sell_shares
-
-            # 2. 再处理买入
-            buy_mask = trade_shares > 0
-            if np.any(buy_mask):
-                buy_shares = trade_shares[buy_mask]
-                buy_cost_basis = buy_shares * today_prices[buy_mask]
-                if verbose:
-                    print(f"[*] buy_cost_basis in period {i}: ({buy_cost_basis})")
-                
-                buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
-                buy_costs = buy_cost_basis * buy_friction_ratio
-                if verbose:
-                    print(f"[*] buy_costs in period {i}: ({buy_costs})")
-
-                total_buy_needed = buy_cost_basis + buy_costs
-                
-                total_needed_cash = np.sum(total_buy_needed)
-                if verbose:
-                    print(f"[*] total_needed_cash in period {i}: ({total_needed_cash})")
-
-                # 防止资金不足 (由于偏离整数导致)：按比例缩减买入请求并继续遵守100份限制
-                if total_needed_cash > cash and total_needed_cash > 0:
-                    if verbose:
-                        print(f"[*] cach: {cash} < total_needed_cash: {total_needed_cash}")
-                    scale_factor = cash / total_needed_cash
-                    if verbose:
-                        print(f"[*] scale_factor: {scale_factor}")
-
-                    scaled_buy_shares = np.trunc((buy_shares * scale_factor) / 100) * 100
-                    
-                    buy_cost_basis = scaled_buy_shares * today_prices[buy_mask]
-                    buy_costs = buy_cost_basis * buy_friction_ratio
-                    total_buy_needed = buy_cost_basis + buy_costs
-                    trade_shares[buy_mask] = scaled_buy_shares
-                
-                cash -= np.sum(total_buy_needed)
-                if verbose:
-                    print(f"[*] cash after buy in period {i}: ({cash})")
-                shares[buy_mask] += trade_shares[buy_mask]
-            if verbose:
-                print(f"[*] shares in period {i}: ({shares})")
-                print(f"[*] cash in period {i}: ({cash})")
-                print("")
-
-        # 计算当日收盘总净值
-        current_value = np.sum(shares * today_prices) + cash
-        portfolio_value.append(current_value)
-
-    # 返回归一化的净值序列 (初始净值=1.0) 以兼容外部评估指标及出图逻辑
-    portfolio_series = pd.Series(portfolio_value[1:], index=daily_returns.index)
-    portfolio_series = portfolio_series / initial_capital
-
-    return portfolio_series
-
-# ==========================================
-# 动态调仓策略引擎
-# ==========================================
-def run_dynamic_adjustment_backtest(
-    prices_df: pd.DataFrame,
-    initial_weights: List[float],
-    asset1_to_adjust: str,
-    asset2_to_adjust: str,
-    enable_dynamic_adjustment: bool = True,
-    annual_fees: Optional[List[float]] = None,
-    rebalance_freq: str = 'M',
-    friction_costs: Dict[str, float] = FRICTION_COST,
-    verbose: bool = True,
-    initial_capital: float = 100000.0,
-    df_fraction: Optional[pd.DataFrame] = None
-) -> pd.Series:
-    """
-    在基础权重上，对特定资产进行动态权重调整的回测。
-    asset1_to_adjust: str, 第一个需要动态调整权重的资产名称
-    asset2_to_adjust: str, 第二个需要动态调整权重的资产名称
-    enable_dynamic_adjustment: bool, 是否启用动态调整策略
-    """
-    if not enable_dynamic_adjustment:
-        if verbose:
-            print("[*] 动态调整策略未启用，跳过此回测。")
-        return pd.Series(dtype=float)
-
-    if verbose:
-        print(f"[*] 启动动态调仓回测引擎...")
-
-    # --- 基本设置与数据对齐 ---
-    if len(prices_df) < 200:
-        if verbose: print("[!] 数据周期不足200天，无法启用动态均线策略。")
-        return pd.Series(dtype=float)
-
-    sma200 = prices_df.rolling(window=200).mean() # 计算200日均线
-
-    panel = pd.concat({
-        'prices': prices_df,
-        'returns': prices_df.pct_change(),
-        'sma200': sma200
-    }, axis=1).dropna()
-    
-    prices = panel['prices']
-    daily_returns = panel['returns']
-    sma200 = panel['sma200']
-    
-    start_index_in_prices_df = prices_df.index.get_loc(prices.index[0]) - 1
-    initial_prices = prices_df.iloc[start_index_in_prices_df].values
-
-    # 提取理财产品收益率序列
-    if df_fraction is not None and not df_fraction.empty:
-        fraction_returns = df_fraction.iloc[:, 0].pct_change().fillna(0)
-        fraction_returns = fraction_returns.reindex(daily_returns.index).fillna(0)
-    else:
-        fraction_returns = pd.Series(0.0, index=daily_returns.index)
-
-    # --- 回测初始化 ---
-    target_cap = initial_capital * np.array(initial_weights)
-    buy_friction_ratio = friction_costs["commission"] + friction_costs["transfer_fee"] + friction_costs["regulatory_fee"]
-    shares = np.floor(target_cap / (initial_prices * (1 + buy_friction_ratio)) / 100) * 100
-    invested_cap = np.sum(shares * initial_prices)
-    buy_costs = np.sum(invested_cap * buy_friction_ratio)
-    cash = initial_capital - invested_cap - buy_costs
-    portfolio_value = [initial_capital]
-    periods = daily_returns.index.to_period(rebalance_freq)
-
     # 获取需要调整的资产的索引位置
     asset_names = prices_df.columns.tolist()
     try:
@@ -321,40 +168,42 @@ def run_dynamic_adjustment_backtest(
 
         rebalance_needed = False
 
-        # --- 均线择时策略（快时钟） ---
-        price1_today = today_prices[asset1_idx]
-        sma200_1_today = sma200.iloc[i, asset1_idx]
-        
-        price2_today = today_prices[asset2_idx]
-        sma200_2_today = sma200.iloc[i, asset2_idx]
+        if enable_dynamic_adjustment:
+            # --- 均线择时策略（快时钟），仅当均线数据有效时执行 ---
+            sma200_1_today = sma200.iloc[i, asset1_idx]
+            sma200_2_today = sma200.iloc[i, asset2_idx]
 
-        # 条件1 & 2: 当 asset1 跌破 200 日均线时，且权重没有被调整过
-        if price1_today < sma200_1_today and np.array_equal(current_target_weights, np.array(initial_weights).copy()):
-            reduce_amount = current_target_weights[asset1_idx] * 0.5
-            
-            # 条件1: asset2 没有跌破 200 日均线，将抽离的权重加给 asset2
-            if price2_today >= sma200_2_today:
-                current_target_weights[asset1_idx] -= reduce_amount
-                current_target_weights[asset2_idx] += reduce_amount
-                rebalance_needed = True
-                if verbose:
-                    print(f"{asset1_to_adjust} 跌破 200 日均线, {asset2_to_adjust} 高于 200 日均线，{asset1_to_adjust} 权重减半增加至{asset2_to_adjust}")
-            # 条件1: asset2 跌破 200 日均线，将抽离的权重保存为现金
-            else:
-                current_target_weights[asset1_idx] -= reduce_amount
-                rebalance_needed = True
-                if verbose:
-                    print(f"{asset2_to_adjust} 也跌破 200 日均线，{asset1_to_adjust} 权重减半并持有现金")
-            if verbose:
-                print(f"调整后目标权重: {current_target_weights}")
-        # 当 asset1 涨破200日均线时
-        # 检查 asset1 是否之前被降权过（即当前权重不等于初始权重），并且现在价格已恢复
-        elif price1_today >= sma200_1_today and not np.array_equal(current_target_weights, np.array(initial_weights).copy()):
-                current_target_weights = np.array(initial_weights).copy()
-                rebalance_needed = True
-                if verbose:
-                    print(f"{asset1_to_adjust} 涨破 200 日均线，权重恢复")
-                    print(f"调整后目标权重: {current_target_weights}")
+            if not pd.isna(sma200_1_today) and not pd.isna(sma200_2_today):
+                price1_today = today_prices[asset1_idx]
+                price2_today = today_prices[asset2_idx]
+
+                # 条件1 & 2: 当 asset1 跌破 200 日均线时，且权重没有被调整过
+                if price1_today < sma200_1_today and np.array_equal(current_target_weights, np.array(initial_weights).copy()):
+                    reduce_amount = current_target_weights[asset1_idx] * 0.5
+                    
+                    # 条件1: asset2 没有跌破 200 日均线，将抽离的权重加给 asset2
+                    if price2_today >= sma200_2_today:
+                        current_target_weights[asset1_idx] -= reduce_amount
+                        current_target_weights[asset2_idx] += reduce_amount
+                        rebalance_needed = True
+                        if verbose:
+                            print(f"{asset1_to_adjust} 跌破 200 日均线, {asset2_to_adjust} 高于 200 日均线，{asset1_to_adjust} 权重减半增加至{asset2_to_adjust}")
+                    # 条件1: asset2 跌破 200 日均线，将抽离的权重保存为现金
+                    else:
+                        current_target_weights[asset1_idx] -= reduce_amount
+                        rebalance_needed = True
+                        if verbose:
+                            print(f"{asset2_to_adjust} 也跌破 200 日均线，{asset1_to_adjust} 权重减半并持有现金")
+                    if verbose:
+                        print(f"调整后目标权重: {current_target_weights}")
+                # 当 asset1 涨破200日均线时
+                # 检查 asset1 是否之前被降权过（即当前权重不等于初始权重），并且现在价格已恢复
+                elif price1_today >= sma200_1_today and not np.array_equal(current_target_weights, np.array(initial_weights).copy()):
+                        current_target_weights = np.array(initial_weights).copy()
+                        rebalance_needed = True
+                        if verbose:
+                            print(f"{asset1_to_adjust} 涨破 200 日均线，权重恢复")
+                            print(f"调整后目标权重: {current_target_weights}")
 
         # --- 周期性再平衡检查（慢时钟） ---
         if i < len(daily_returns) - 1 and periods[i] != periods[i+1]:
@@ -592,15 +441,17 @@ if __name__ == "__main__":
     valid_portfolios = []
 
     for test_weights in generate_constrained_weights(TARGET_BOUNDS, 0.05):
-        portfolio_res = run_backtest_engine(prices_df=df_prices, 
-                                            initial_weights=test_weights, 
-                                            annual_fees=ANNUAL_FEES, 
-                                            enable_rebalance=True,
-                                            rebalance_freq='M', 
-                                            friction_costs=FRICTION_COST, 
-                                            verbose=False, 
-                                            initial_capital=100000.0,
-                                            df_fraction=df_fraction)
+        portfolio_res = run_dynamic_adjustment_backtest(prices_df=df_prices, 
+                                                        initial_weights=test_weights, 
+                                                        asset1_to_adjust=TARGET_SYMBOLS[2]['symbol'],
+                                                        asset2_to_adjust=TARGET_SYMBOLS[0]['symbol'],
+                                                        enable_dynamic_adjustment=False,
+                                                        annual_fees=ANNUAL_FEES, 
+                                                        rebalance_freq='M', 
+                                                        friction_costs=FRICTION_COST, 
+                                                        verbose=False, 
+                                                        initial_capital=100000.0,
+                                                        df_fraction=df_fraction)
         
         if portfolio_res.empty:
             continue
@@ -645,43 +496,6 @@ if __name__ == "__main__":
     # 按照最终净值 (final_return) 降序排序，选出最高的一组
     valid_portfolios.sort(key=lambda x: x['final_return'], reverse=True)
     best_portfolio = valid_portfolios[0]
-    
-    # 记录原始最佳组合的指标，用于后续对比
-    original_metrics = {
-        'final_return': best_portfolio['final_return'],
-        'mdd_value': best_portfolio['mdd_value'],
-        'sortino': best_portfolio['sortino'],
-        'underwater_days': best_portfolio['underwater_days']
-    }
-
-    # 加入动态权重调整策略
-    dynamic_portfolio_res = run_dynamic_adjustment_backtest(prices_df=df_prices, 
-                                                            initial_weights=best_portfolio['weights'], 
-                                                            asset1_to_adjust=TARGET_SYMBOLS[2]['symbol'],
-                                                            asset2_to_adjust=TARGET_SYMBOLS[0]['symbol'],
-                                                            enable_dynamic_adjustment=True,
-                                                            annual_fees=ANNUAL_FEES, 
-                                                            rebalance_freq='M', 
-                                                            friction_costs=FRICTION_COST, 
-                                                            verbose=True, 
-                                                            initial_capital=100000.0,
-                                                            df_fraction=df_fraction)
-
-    # 如果动态调仓顺利跑完，更新最佳组合的数据以便后续绘图
-    if not dynamic_portfolio_res.empty:
-        best_portfolio['portfolio_res'] = dynamic_portfolio_res
-        best_portfolio['mdd_value'], best_portfolio['mdd_date'], _ = calculate_max_drawdown(dynamic_portfolio_res)
-        best_portfolio['rolling_sharpe'] = calculate_rolling_sharpe_ratio(dynamic_portfolio_res, risk_free_rate=dynamic_rf)
-        best_portfolio['sortino'] = calculate_sortino_ratio(dynamic_portfolio_res, risk_free_rate=dynamic_rf)
-        best_portfolio['underwater_days'], best_portfolio['uw_start'], best_portfolio['uw_end'] = calculate_underwater_time(dynamic_portfolio_res)
-        best_portfolio['final_return'] = dynamic_portfolio_res.iloc[-1]
-
-        # 打印动态策略对指标的改变情况
-        print("\n[*] 动态调整策略执行完毕，指标变化如下:")
-        print(f"  - 最终净值:     {original_metrics['final_return']:.4f} -> {best_portfolio['final_return']:.4f}")
-        print(f"  - 最大回撤:     {original_metrics['mdd_value']:.2%} -> {best_portfolio['mdd_value']:.2%}")
-        print(f"  - 索提诺比率:   {original_metrics['sortino']:.2f} -> {best_portfolio['sortino']:.2f}")
-        print(f"  - 最大水下时间: {original_metrics['underwater_days']}天 -> {best_portfolio['underwater_days']}天")
 
     # 重新赋值给全局变量，供绘图使用
     WEIGHTS = best_portfolio['weights']
