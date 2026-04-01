@@ -362,7 +362,7 @@ def evaluate_portfolio(mdd_val: float, shp: pd.Series, srt: float, underwater: i
     MDD_VAL = -0.20
     SHARPE_RATIO = 0.6
     SHARPE_RATIO_PERCENTAGE = 0.55
-    SORTINO_RATIO = 0.75
+    SORTINO_RATIO = 0.8
     UNDERWATER_TIME = 600
 
     reasons = []
